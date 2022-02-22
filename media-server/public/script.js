@@ -87,10 +87,10 @@ submitButton.onclick = async() => {
             track,
             ...globalParams,
         }
-       console.log('globalParams', globalParams)
+        console.log('globalParams', globalParams)
 
-       roomName = roomField.value
-       socket.emit("create-or-join", roomName)
+        roomName = roomField.value
+        socket.emit("create-or-join", roomName)
 
     } catch(error) {
         console.error('Couldn\'t get local media stream', error)

@@ -9,7 +9,7 @@ let io = require('socket.io')(http, {
     }
 })
 
-const port = process.env.PORT || 3000
+const port = process.env.PORT || 3001
 
 const mediasoup = require('mediasoup')
 
@@ -146,9 +146,10 @@ io.on('connection', async (socket) => {
         otherParticipants = Object.keys(transports[room]).filter(id => id !== socket.id);
 
         if(otherParticipants.length > 0) {
-            // Send list of participants to
+            // Send list of participants to newly joined participant
             io.to(socket.id).emit('other-participants', { otherParticipants })
     
+            // Send newly joined participant's info to all other participants
             otherParticipants.forEach(socketId => {
                 io.to(socketId).emit('new-participant', {
                     participantSocketId: socket.id,
@@ -164,10 +165,10 @@ io.on('connection', async (socket) => {
 
     socket.on('consume-participant', async({ rtpCapabilities, participantSocketId, room }, callback) => {
         try {
-            let producer = transports[room][participantSocketId]['producer']
+            let participantProducer = transports[room][participantSocketId]['producer']
             
             if(routers[room].canConsume({
-                producerId: producer.id,
+                producerId: participantProducer.id,
                 rtpCapabilities
             })) {
 
@@ -181,7 +182,7 @@ io.on('connection', async (socket) => {
                 let tempConsumerTransport = transports[room][socket.id].consumerTransport
 
                 let tempConsumer = await tempConsumerTransport.consume({
-                    producerId: producer.id,
+                    producerId: participantProducer.id,
                     rtpCapabilities,
                     paused: true
                 })
@@ -208,7 +209,7 @@ io.on('connection', async (socket) => {
                 callback({
                     params: {
                         id: tempConsumer.id,
-                        producerId: producer.id,
+                        producerId: participantProducer.id,
                         kind: tempConsumer.kind,
                         rtpParameters: tempConsumer.rtpParameters,
                     }
