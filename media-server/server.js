@@ -114,7 +114,7 @@ io.on('connection', async (socket) => {
         console.log('transports', transports)
     })
 
-    socket.on('transport-connect', async ({ dtlsParameters, consumerId, isConsumer, room }) => {
+    socket.on('transport-connect', async ({ dtlsParameters, consumerTransportId, isConsumer, room }) => {
         console.log('dtlsParameters recieved from socket', socket.id)
         
         if(isConsumer) {
@@ -184,13 +184,12 @@ io.on('connection', async (socket) => {
                 let tempConsumer = await tempConsumerTransport.consume({
                     producerId: participantProducer.id,
                     rtpCapabilities,
-                    paused: true
+                    // paused: true
                 })
 
                 transports[room][socket.id].consumersList = {
                     ...transports[room][socket.id].consumersList,
                     [tempConsumer.id]: {
-                        consumerTransport: tempConsumerTransport,
                         consumer: tempConsumer,
                     }
                 }
@@ -202,9 +201,6 @@ io.on('connection', async (socket) => {
                 tempConsumer.on('producerclose', () => {
                     console.log('Producer of', socket.id, 'consumer has closed')
                 })
-
-                console.log('Consumer', tempConsumer.id, 'created')
-                console.log('transports', transports)
 
                 callback({
                     params: {
@@ -230,8 +226,9 @@ io.on('connection', async (socket) => {
         }
     })
 
-    socket.on('consumer-resume', async({ consumerId, room }) => {
+    socket.on('consumer-resume', async({ consumerId, room }, callback) => {
         transports[room][socket.id].consumersList[consumerId].consumer.resume()
+        callback()
     })
 
     socket.on('disconnect', () => {
@@ -287,10 +284,12 @@ const createWebRtcTransport = async (room, currSocketId, callback) => {
         console.log(error)
 
         // Callback to client with error
-        callback({
-            params: {
-                error: error
-            }
-        })
+        if(callback) {
+            callback({
+                params: {
+                    error: error
+                }
+            })
+        }
     }
 }

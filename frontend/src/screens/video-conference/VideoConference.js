@@ -13,10 +13,9 @@ import VideoComponent from './VideoComponent'
 const useStyles = makeStyles(theme => ({
     video: {
         transform: 'scaleX(-1)',
+        borderRadius: 10,
     }
 }))
-
-let tempServerConsumerTransportId = null;
 
 const videoConstraints = {
     video: {
@@ -59,6 +58,10 @@ let globalParams = {
     }
 }
 
+let device = null;
+let producerTransport = null;
+let consumerTransport = null;
+
 const VideoConference = (props) => {
 	const classes = useStyles()
 
@@ -66,14 +69,10 @@ const VideoConference = (props) => {
     const [socket, setSocket] = useState(null)
     const [localStream, setLocalStream] = useState(null);
     const [routerRtpCapabilities, setRouterRtpCapabilities] = useState(null)
-    const [device, setDevice] = useState(null)
+    // const [device, setDevice] = useState(null)
     const [error, setError] = useState('')
 
 	const localVidEl = useRef(null);
-
-    // Transports
-    const [producerTransport, setProducerTransport] = useState(null)
-    const [consumerTransport, setConsumerTransport] = useState(null)
 
     const [videoProducer, setVideoProducer] = useState(null)
     const [consumers, setConsumers] = useState({});
@@ -131,7 +130,7 @@ const VideoConference = (props) => {
         })
     }
 
-    const assignConsumerTransportEvents = (consumerId) => {
+    const assignConsumerTransportEvents = (consumerTransportId) => {
     
         consumerTransport.on('connect', async({ dtlsParameters }, callback, errback) => {
             try {
@@ -140,7 +139,7 @@ const VideoConference = (props) => {
                     dtlsParameters,
                     room: joinRoom,
                     isConsumer: true,
-                    consumerId,
+                    consumerTransportId,
                 })
     
                 // Tell the local transport that paramters were submitted to server-side
@@ -151,51 +150,50 @@ const VideoConference = (props) => {
         })
     }
 
-    const consumeParticipant = async(participantSocketId) => {
-    
-        console.log('device', device)
-        await socket.emit('consume-participant', {
-            rtpCapabilities: device.rtpCapabilities,
-            participantSocketId,
-            room: joinRoom,
+    const consumeParticipant = (participantSocketId) => {
+        return new Promise(async(resolve, reject) => {
+            await socket.emit('consume-participant', {
+                rtpCapabilities: device.rtpCapabilities,
+                participantSocketId,
+                room: joinRoom,
+            
+            }, async({ params }) => {
+                if(params && params.error) {
+                    console.log(params.error)
+                    return
+                }
         
-        }, async({ params }) => {
-            if(params && params.error) {
-                console.log(params.error)
-                return
-            }
-    
-            console.log('Received params for server-side consumer for socket', participantSocketId)
-    
-            let tempConsumer = await consumerTransport.consume({
-                id: params.id,
-                producerId: params.producerId,
-                kind: params.kind,
-                rtpParameters: params.rtpParameters
-            })
-    
-            setConsumers({
-                ...consumers,
-                [params.producerId]: tempConsumer,
-            })
-            console.log('consumers:', consumers)
-    
-            const { track } = tempConsumer.consumer;
-    
-            console.log('Recieved track for producer '+params.producerId, track)
-    
-            // Tell server to resume this specific consumer
-            await socket.emit('consumer-resume', {
-                consumerId: params.id,
-                room: joinRoom
+                console.log('Received params for server-side consumer for socket', participantSocketId)
+        
+                let tempConsumer = await consumerTransport.consume({
+                    id: params.id,
+                    producerId: params.producerId,
+                    kind: params.kind,
+                    rtpParameters: params.rtpParameters
+                })
+        
+                console.log('Recieved track for producer '+params.producerId)
+        
+                // Tell server to resume this specific consumer
+                await socket.emit('consumer-resume', {
+                    consumerId: params.id,
+                    room: joinRoom
+                }, () => {
+                    setConsumers({
+                        ...consumers,
+                        [params.producerId]: tempConsumer,
+                    })
+                    resolve()
+                })
             })
         })
+
     }
 
     // Numerous useEffects because a lot of states are updated on initial media server connection
 
     useEffect(async() => {
-        if(device && routerRtpCapabilities) {
+        if(routerRtpCapabilities) {
             await device.load({ routerRtpCapabilities })
             console.log('Device created', device)
 
@@ -209,28 +207,16 @@ const VideoConference = (props) => {
                 console.log('Router transport params recieved', params)
     
                 // Create local send transport
-                setProducerTransport(await device.createSendTransport(params))
+                producerTransport = await device.createSendTransport(params)
+                assignProducerTransportEvents()
+                console.log('producerTransport', producerTransport)
+        
+                setVideoProducer(await producerTransport.produce(globalParams))
             })
         }
-    }, [device, routerRtpCapabilities])
+    }, [routerRtpCapabilities])
 
     useEffect(() => {
-        let hasConsu
-        Object.keys(consumers).forEach(consumer => {
-            
-        })
-    }, [consumers])
-
-    useEffect(async() => {
-        if(producerTransport) {
-            assignProducerTransportEvents()
-            console.log('producerTransport', producerTransport)
-    
-            setVideoProducer(await producerTransport.produce(globalParams))
-        }
-    }, [producerTransport])
-
-    useState(() => {
         if(videoProducer) {
             assignProducerEvents()
             console.log('videoProducer', videoProducer)
@@ -238,15 +224,8 @@ const VideoConference = (props) => {
     }, [videoProducer])
     
     useEffect(() => {
-        console.log('ran')
         setSocket(io(process.env.REACT_APP_MEDIA_SERVER_SOCKET_URL))
     }, [])
-
-    useEffect(() => {
-        if(consumerTransport && tempServerConsumerTransportId)
-            assignConsumerTransportEvents(tempServerConsumerTransportId)
-        
-    }, [consumerTransport])
 
     useEffect(async() => {
         if(socket) {
@@ -256,22 +235,31 @@ const VideoConference = (props) => {
             })
     
             socket.on('rtp-capabilities', async(data) => {
+                // setDevice(new mediasoupClient.Device())
+                device = new mediasoupClient.Device()
                 setRouterRtpCapabilities(data.rtpCapabilities)
-                setDevice(new mediasoupClient.Device())
             })
 
             socket.on('server-consumer-transport-created', async({ serverConsumerTransportParams }) => {
                 if(device) {
-                    tempServerConsumerTransportId = serverConsumerTransportParams.id
-                    setConsumerTransport(await device.createRecvTransport(serverConsumerTransportParams))
+                    consumerTransport = await device.createRecvTransport(serverConsumerTransportParams)
+                    assignConsumerTransportEvents(serverConsumerTransportParams.id)
                 }
             })
 
             socket.on('other-participants', async({ otherParticipants }) => {
+                console.log('otherParticipants', otherParticipants)
                 for(let i = 0; i < otherParticipants.length; i++) {
-                    consumeParticipant(otherParticipants[i])
+                    await consumeParticipant(otherParticipants[i])
                 }
             })
+
+            socket.on('new-participant', async({ participantSocketId }) => {
+                console.log('New participant', participantSocketId)
+                await consumeParticipant(participantSocketId)
+            })
+
+            // new-participant is still left !!
     
             let stream = await navigator.mediaDevices.getUserMedia(videoConstraints)
             // let stream = await navigator.mediaDevices.getDisplayMedia(screenConstraints);
@@ -285,7 +273,6 @@ const VideoConference = (props) => {
                 track,
                 ...globalParams,
             }
-            console.log('globalParams', globalParams)
             socket.emit("create-or-join", joinRoom)
         }
 
@@ -293,16 +280,16 @@ const VideoConference = (props) => {
 
     return (
         <div className='w-full flex flex-col justify-center'>
-            <Typography>
+            {/* <Typography>
                 { username }
             </Typography>
 
             <Typography>
                 { joinRoom }
-            </Typography>
+            </Typography> */}
 
             <Grid container spacing={3}>
-                <Grid xs={6} sm={4}>
+                <Grid item xs={6} sm={4}>
                     {localStream && (
                         <VideoComponent 
                             id="local"
@@ -311,14 +298,14 @@ const VideoConference = (props) => {
                         />
                     )}
                 </Grid>
-                {Object.keys(consumers).map(consumer => {
-                    let tempConsumer = consumers[consumer];
-                    const { track } = tempConsumer.consumer;
+                {Object.values(consumers).map(consumer => {
+                    console.log('Total consumers:', consumers)
+                    const { track } = consumer
 
                     return (
-                        <Grid xs={6} sm={4}>
+                        <Grid item xs={6} sm={4}>
                             <VideoComponent
-                                stream={track}
+                                track={track}
                                 className={classes.video}
                             />
                         </Grid>
