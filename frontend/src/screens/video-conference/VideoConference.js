@@ -57,10 +57,12 @@ let globalParams = {
         videoGoogleStartBitrate: 1000,
     }
 }
+let usedParams = {} // To be updated with global params
 
-let device = null;
-let producerTransport = null;
-let consumerTransport = null;
+let device = null
+let producerTransport = null
+let consumerTransport = null
+let tempConsumers = {}
 
 const VideoConference = (props) => {
 	const classes = useStyles()
@@ -76,7 +78,6 @@ const VideoConference = (props) => {
 
     const [videoProducer, setVideoProducer] = useState(null)
     const [consumers, setConsumers] = useState({});
-    const [consumerVidEls, setConsumerVidEls] = useState([]);
 
     const assignProducerTransportEvents = () => {
         producerTransport.on('connect', async({ dtlsParameters }, callback, errback) => {
@@ -179,15 +180,14 @@ const VideoConference = (props) => {
                     consumerId: params.id,
                     room: joinRoom
                 }, () => {
-                    setConsumers({
-                        ...consumers,
+                    tempConsumers = {
+                        ...tempConsumers,
                         [params.producerId]: tempConsumer,
-                    })
+                    }
                     resolve()
                 })
             })
         })
-
     }
 
     // Numerous useEffects because a lot of states are updated on initial media server connection
@@ -211,7 +211,7 @@ const VideoConference = (props) => {
                 assignProducerTransportEvents()
                 console.log('producerTransport', producerTransport)
         
-                setVideoProducer(await producerTransport.produce(globalParams))
+                setVideoProducer(await producerTransport.produce(usedParams))
             })
         }
     }, [routerRtpCapabilities])
@@ -252,11 +252,23 @@ const VideoConference = (props) => {
                 for(let i = 0; i < otherParticipants.length; i++) {
                     await consumeParticipant(otherParticipants[i])
                 }
+
+                setConsumers(currConsumers => ({
+                    ...currConsumers,
+                    ...tempConsumers
+                }))
+                tempConsumers = {}
             })
 
             socket.on('new-participant', async({ participantSocketId }) => {
                 console.log('New participant', participantSocketId)
                 await consumeParticipant(participantSocketId)
+
+                setConsumers(currConsumers => ({
+                    ...currConsumers,
+                    ...tempConsumers
+                }))
+                tempConsumers = {}
             })
 
             // new-participant is still left !!
@@ -264,12 +276,10 @@ const VideoConference = (props) => {
             let stream = await navigator.mediaDevices.getUserMedia(videoConstraints)
             // let stream = await navigator.mediaDevices.getDisplayMedia(screenConstraints);
             setLocalStream(stream)
-            // localVideo.srcObject = stream
-            // localVideo.muted = true
         
             let track = stream.getVideoTracks()[0]
         
-            globalParams = {
+            usedParams = {
                 track,
                 ...globalParams,
             }
@@ -288,30 +298,32 @@ const VideoConference = (props) => {
                 { joinRoom }
             </Typography> */}
 
-            <Grid container spacing={3}>
-                <Grid item xs={6} sm={4}>
-                    {localStream && (
-                        <VideoComponent 
-                            id="local"
-                            stream={localStream}
-                            className={classes.video}
-                        />
-                    )}
-                </Grid>
-                {Object.values(consumers).map(consumer => {
-                    console.log('Total consumers:', consumers)
-                    const { track } = consumer
-
-                    return (
-                        <Grid item xs={6} sm={4}>
-                            <VideoComponent
-                                track={track}
+            <div className='mx-5 my-3'>
+                <Grid container spacing={3}>
+                    <Grid item xs={6} sm={4}>
+                        {localStream && (
+                            <VideoComponent 
+                                id="local"
+                                stream={localStream}
                                 className={classes.video}
                             />
-                        </Grid>
-                    )
-                })}
-            </Grid>
+                        )}
+                    </Grid>
+                    {Object.values(consumers).map(consumer => {
+                        console.log('Total consumers:', consumers)
+                        const { track } = consumer
+
+                        return (
+                            <Grid item xs={6} sm={4}>
+                                <VideoComponent
+                                    track={track}
+                                    className={classes.video}
+                                />
+                            </Grid>
+                        )
+                    })}
+                </Grid>
+            </div>
         </div>
     )
 }
