@@ -126,95 +126,146 @@ io.on('connection', async (socket) => {
         }
     })
 
-    socket.on('transport-produce', async ({ room, kind, rtpParameters, appData }, callback) => {
+    socket.on('transport-produce', async ({ room, kind, rtpParameters, appData, sharingMode }, callback) => {
         let socketProducerTransport = transports[room][socket.id]['producerTransport']
 
-        transports[room][socket.id]['producer'] = await socketProducerTransport.produce({
+        let producerName = ''
+
+        switch(sharingMode) {
+            case 'self':
+                if(kind === 'video')
+                    producerName = 'cameraVideoProducer'
+                if(kind === 'audio')
+                    producerName = 'micAudioProducer'
+                break
+        }
+        transports[room][socket.id][producerName] = await socketProducerTransport.produce({
             kind, rtpParameters
         })
-        let socketProducer = transports[room][socket.id]['producer']
+        let tempProducer = transports[room][socket.id][producerName]
 
-        socketProducer.on('transportclose', () => {
+        tempProducer.on('transportclose', () => {
             console.log('Transport for', socket.id, 'has closed')
-            socketProducer.close()
+            tempProducer.close()
         })
 
         // Inform everyone of new participant, and new participant of other participants
         // AFTER new participant's producer has been made on server and locally
-        let otherParticipants = []
-
-        otherParticipants = Object.keys(transports[room]).filter(id => id !== socket.id);
-
-        if(otherParticipants.length > 0) {
-            // Send list of participants to newly joined participant
-            io.to(socket.id).emit('other-participants', { otherParticipants })
+        if(
+            transports[room][socket.id]['cameraVideoProducer']
+            && transports[room][socket.id]['micAudioProducer']
+        ) {
+            let otherParticipants = []
     
-            // Send newly joined participant's info to all other participants
-            otherParticipants.forEach(socketId => {
-                io.to(socketId).emit('new-participant', {
-                    participantSocketId: socket.id,
-                    kind
+            otherParticipants = Object.keys(transports[room]).filter(id => id !== socket.id);
+    
+            if(otherParticipants.length > 0) {
+                // Send list of participants to newly joined participant
+                io.to(socket.id).emit('other-participants', { otherParticipants })
+        
+                // Send newly joined participant's info to all other participants
+                otherParticipants.forEach(socketId => {
+                    io.to(socketId).emit('new-participant', {
+                        participantSocketId: socket.id,
+                        kind
+                    })
                 })
-            })
+            }
         }
 
         console.log('transports', transports)
 
-        callback({ id: socketProducer.id })
+        callback({ id: tempProducer.id })
     })
 
     socket.on('consume-participant', async({ rtpCapabilities, participantSocketId, room }, callback) => {
         try {
-            let participantProducer = transports[room][participantSocketId]['producer']
+            let participantProducers = {
+                cameraVideoProducer: transports[room][participantSocketId]['cameraVideoProducer'],
+                micAudioProducer: transports[room][participantSocketId]['micAudioProducer'],
+            }
+
+            let consumerParams = []
+
+            let participantProducerTypes = Object.keys(participantProducers)
+
+            for(let i = 0; i < participantProducerTypes.length; i++) {
+                let producerType = participantProducerTypes[i]
+                let tempProducer = participantProducers[producerType]
+
+                if(routers[room].canConsume({
+                    producerId: tempProducer.id,
+                    rtpCapabilities
+                })) {
+    
+                    if( !transports[room][socket.id].consumersList ) {
+                        transports[room][socket.id] = {
+                            ...transports[room][socket.id],
+                            consumersList: {}
+                        }
+                    }
+    
+                    let tempConsumerTransport = transports[room][socket.id].consumerTransport
+    
+                    let tempConsumer = await tempConsumerTransport.consume({
+                        producerId: tempProducer.id,
+                        rtpCapabilities,
+                        paused: true
+                    })
+    
+                    transports[room][socket.id].consumersList[participantSocketId] = {
+                        ...transports[room][socket.id].consumersList[participantSocketId],
+                        [producerType]: tempConsumer,
+                    }
             
-            if(routers[room].canConsume({
-                producerId: participantProducer.id,
-                rtpCapabilities
-            })) {
-
-                if( !transports[room][socket.id].consumersList ) {
-                    transports[room][socket.id] = {
-                        ...transports[room][socket.id],
-                        consumersList: {}
-                    }
-                }
-
-                let tempConsumerTransport = transports[room][socket.id].consumerTransport
-
-                let tempConsumer = await tempConsumerTransport.consume({
-                    producerId: participantProducer.id,
-                    rtpCapabilities,
-                    // paused: true
-                })
-
-                transports[room][socket.id].consumersList = {
-                    ...transports[room][socket.id].consumersList,
-                    [tempConsumer.id]: {
-                        consumer: tempConsumer,
-                    }
-                }
-
-                tempConsumer.on('transportclose', () => {
-                    console.log('Transport for', socket.id, 'has closed')
-                })
-
-                tempConsumer.on('producerclose', () => {
-                    console.log('Producer of', socket.id, 'consumer has closed')
-                })
-
-                callback({
-                    params: {
+                    console.log('transports', transports)
+    
+                    tempConsumer.on('transportclose', () => {
+                        console.log('Transport for', socket.id, 'has closed')
+                    })
+    
+                    tempConsumer.on('producerclose', () => {
+                        console.log('Producer of', socket.id, 'consumer has closed')
+                    })
+                    
+                    consumerParams.push({
                         id: tempConsumer.id,
-                        producerId: participantProducer.id,
+                        producerId: tempProducer.id,
                         kind: tempConsumer.kind,
                         rtpParameters: tempConsumer.rtpParameters,
-                    }
-                })
-
-            } else {
-                // Tell participant that this specific producer cannot be consumed
-                io.to(socket.id).emit('cannot-consume-producer', { participantSocketId })
+                        producerType,
+                        participantSocketId,
+                    })
+    
+                    // io.to(socket.id).emit('consume-made', {
+                    //     params: {
+                    //         id: tempConsumer.id,
+                    //         producerId: tempProducer.id,
+                    //         kind: tempConsumer.kind,
+                    //         rtpParameters: tempConsumer.rtpParameters,
+                    //         producerType,
+                    //         participantSocketId,
+                    //     }
+                    // })
+                    // callback({
+                    //     params: {
+                    //         id: tempConsumer.id,
+                    //         producerId: tempProducer.id,
+                    //         kind: tempConsumer.kind,
+                    //         rtpParameters: tempConsumer.rtpParameters,
+                    //         producerType,
+                    //         participantSocketId,
+                    //     }
+                    // })
+    
+                } else {
+                    // Tell participant that this specific producer cannot be consumed
+                    console.log('Cannot consume', participantSocketId+'\'s', producerType)
+                    io.to(socket.id).emit('cannot-consume-producer', { participantSocketId, producerType })
+                }
             }
+            
+            callback({ consumerParams })            
 
         } catch(error) {
             console.log('Error on consume', error.message)
@@ -226,8 +277,8 @@ io.on('connection', async (socket) => {
         }
     })
 
-    socket.on('consumer-resume', async({ consumerId, room }, callback) => {
-        transports[room][socket.id].consumersList[consumerId].consumer.resume()
+    socket.on('consumer-resume', async({ room, participantSocketId, producerType }, callback) => {
+        transports[room][socket.id].consumersList[participantSocketId][producerType].resume()
         callback()
     })
 

@@ -57,7 +57,10 @@ let globalParams = {
         videoGoogleStartBitrate: 1000,
     }
 }
-let usedParams = {} // To be updated with global params
+
+// To be updated with global params
+let cameraParams = {}
+let micParams = {}
 
 let device = null
 let producerTransport = null
@@ -74,9 +77,10 @@ const VideoConference = (props) => {
     // const [device, setDevice] = useState(null)
     const [error, setError] = useState('')
 
-	const localVidEl = useRef(null);
+    const [sharingMode, setSharingMode] = useState('self');
 
-    const [videoProducer, setVideoProducer] = useState(null)
+    const [cameraVideoProducer, setCameraVideoProducer] = useState(null)
+    const [micAudioProducer, setMicAudioProducer] = useState(null)
     const [consumers, setConsumers] = useState({});
 
     const assignProducerTransportEvents = () => {
@@ -98,15 +102,14 @@ const VideoConference = (props) => {
         })
     
         producerTransport.on('produce', async(parameters, callback, errback) => {
-            console.log('Local \'producerTransport\' parameters', parameters)
-    
             try {
                 await socket.emit('transport-produce', {
                     // transportId: producerTransport.id,
                     kind: parameters.kind,
                     rtpParameters: parameters.rtpParameters,
                     appData: parameters.appData,
-                    room: joinRoom
+                    room: joinRoom,
+                    sharingMode
     
                 }, ({ id }) => {
                     // On socket.io callback, tell local transport that parameters were submitted to server-side
@@ -120,12 +123,22 @@ const VideoConference = (props) => {
     }
 
     const assignProducerEvents = () => {
-        videoProducer.on('trackended', () => {
+        cameraVideoProducer.on('trackended', () => {
             // Close video track
             console.log('Track ended...')
         })
     
-        videoProducer.on('transportclose', () => {
+        cameraVideoProducer.on('transportclose', () => {
+            // Close video track
+            console.log('Transport closed...')
+        })
+
+        micAudioProducer.on('trackended', () => {
+            // Close video track
+            console.log('Track ended...')
+        })
+    
+        micAudioProducer.on('transportclose', () => {
             // Close video track
             console.log('Transport closed...')
         })
@@ -158,34 +171,42 @@ const VideoConference = (props) => {
                 participantSocketId,
                 room: joinRoom,
             
-            }, async({ params }) => {
-                if(params && params.error) {
-                    console.log(params.error)
-                    return
-                }
-        
-                console.log('Received params for server-side consumer for socket', participantSocketId)
-        
-                let tempConsumer = await consumerTransport.consume({
-                    id: params.id,
-                    producerId: params.producerId,
-                    kind: params.kind,
-                    rtpParameters: params.rtpParameters
-                })
-        
-                console.log('Recieved track for producer '+params.producerId)
-        
-                // Tell server to resume this specific consumer
-                await socket.emit('consumer-resume', {
-                    consumerId: params.id,
-                    room: joinRoom
-                }, () => {
-                    tempConsumers = {
-                        ...tempConsumers,
-                        [params.producerId]: tempConsumer,
+            }, async({ consumerParams }) => {
+
+                console.log('consumerParams', consumerParams)
+
+                for(let i = 0; i < consumerParams.length; i++) {
+                    let params = consumerParams[i]
+
+                    if(params && params.error) {
+                        console.log(params.error)
+                        return
                     }
-                    resolve()
-                })
+                    
+                    let tempConsumer = await consumerTransport.consume({
+                        id: params.id,
+                        producerId: params.producerId,
+                        kind: params.kind,
+                        rtpParameters: params.rtpParameters
+                    })
+            
+                    console.log('Consumer made:', tempConsumer)
+            
+                    // Tell server to resume this specific consumer
+                    await socket.emit('consumer-resume', {
+                        room: joinRoom,
+                        participantSocketId: params.participantSocketId,
+                        producerType: params.producerType,
+                    }, () => {
+                        tempConsumers[params.participantSocketId] = {
+                            ...tempConsumers[params.participantSocketId],
+                            [params.producerType]: tempConsumer,
+                        }
+
+                        if(i === consumerParams.length - 1)
+                            resolve()
+                    })
+                }
             })
         })
     }
@@ -211,17 +232,17 @@ const VideoConference = (props) => {
                 assignProducerTransportEvents()
                 console.log('producerTransport', producerTransport)
         
-                setVideoProducer(await producerTransport.produce(usedParams))
+                setCameraVideoProducer(await producerTransport.produce(cameraParams))
+                setMicAudioProducer(await producerTransport.produce(micParams))
             })
         }
     }, [routerRtpCapabilities])
 
     useEffect(() => {
-        if(videoProducer) {
+        if(cameraVideoProducer && micAudioProducer)
             assignProducerEvents()
-            console.log('videoProducer', videoProducer)
-        }
-    }, [videoProducer])
+
+    }, [cameraVideoProducer, micAudioProducer])
     
     useEffect(() => {
         setSocket(io(process.env.REACT_APP_MEDIA_SERVER_SOCKET_URL))
@@ -248,14 +269,14 @@ const VideoConference = (props) => {
             })
 
             socket.on('other-participants', async({ otherParticipants }) => {
-                console.log('otherParticipants', otherParticipants)
                 for(let i = 0; i < otherParticipants.length; i++) {
                     await consumeParticipant(otherParticipants[i])
                 }
 
+                console.log('tempConsumers', tempConsumers)
                 setConsumers(currConsumers => ({
                     ...currConsumers,
-                    ...tempConsumers
+                    ...tempConsumers,
                 }))
                 tempConsumers = {}
             })
@@ -264,11 +285,40 @@ const VideoConference = (props) => {
                 console.log('New participant', participantSocketId)
                 await consumeParticipant(participantSocketId)
 
+                console.log('tempConsumers', tempConsumers)
                 setConsumers(currConsumers => ({
                     ...currConsumers,
-                    ...tempConsumers
+                    ...tempConsumers,
                 }))
                 tempConsumers = {}
+            })
+
+            socket.on('consume-made', async({ params }) => {
+                if(params && params.error) {
+                    console.log(params.error)
+                    return
+                }
+                
+                let tempConsumer = await consumerTransport.consume({
+                    id: params.id,
+                    producerId: params.producerId,
+                    kind: params.kind,
+                    rtpParameters: params.rtpParameters
+                })
+        
+                console.log('Consumer made:', tempConsumer)
+        
+                // Tell server to resume this specific consumer
+                await socket.emit('consumer-resume', {
+                    room: joinRoom,
+                    participantSocketId: params.participantSocketId,
+                    producerType: params.producerType,
+                }, () => {
+                    tempConsumers[params.participantSocketId] = {
+                        ...tempConsumers[params.participantSocketId],
+                        [params.producerType]: tempConsumer,
+                    }
+                })
             })
 
             // new-participant is still left !!
@@ -277,10 +327,15 @@ const VideoConference = (props) => {
             // let stream = await navigator.mediaDevices.getDisplayMedia(screenConstraints);
             setLocalStream(stream)
         
-            let track = stream.getVideoTracks()[0]
+            let cameraVideoTrack = stream.getVideoTracks()[0]
+            let micAudioTrack = stream.getAudioTracks()[0]
         
-            usedParams = {
-                track,
+            cameraParams = {
+                track: cameraVideoTrack,
+                ...globalParams,
+            }
+            micParams = {
+                track: micAudioTrack,
                 ...globalParams,
             }
             socket.emit("create-or-join", joinRoom)
@@ -306,18 +361,30 @@ const VideoConference = (props) => {
                                 id="local"
                                 stream={localStream}
                                 className={classes.video}
+                                isMuted={true}
                             />
                         )}
                     </Grid>
                     {Object.values(consumers).map(consumer => {
-                        console.log('Total consumers:', consumers)
-                        const { track } = consumer
+                        console.log('Total consumers', consumers)
+
+                        if(!consumer.cameraVideoProducer || !consumer.micAudioProducer)
+                            return null
+                        
+                        let { track: cameraVideoTrack } = consumer.cameraVideoProducer
+                        let { track: micAudioTrack } = consumer.micAudioProducer
+
+                        let tracks = {
+                            cameraVideoTrack,
+                            micAudioTrack,
+                        }
 
                         return (
                             <Grid item xs={6} sm={4}>
                                 <VideoComponent
-                                    track={track}
+                                    tracks={tracks}
                                     className={classes.video}
+                                    isMuted={false}
                                 />
                             </Grid>
                         )
