@@ -370,20 +370,18 @@ const VideoConference = (props) => {
                             />
                         )}
                     </Grid>
-                    {Object.values(consumers).map(consumer => {
+                    {Object.values(consumersRef.current).map(consumer => {
                         console.log('Total consumers', consumers)
-
-                        let participantConsumers = {
-                            cameraVideoConsumer: consumer.cameraVideoProducer,
-                            micAudioConsumer: consumer.micAudioProducer,
-                            screenVideoConsumer: consumer.screenVideoTrack,
-                            screenAudioConsumer: consumer.screenAudioTrack,
-                        }
                         
                         return (
-                            <Grid item xs={6} sm={4} key={consumers}>
+                            <Grid item xs={6} sm={4} key={consumer}>
                                 <ParticipantWindow
-                                    consumers={participantConsumers}
+                                    consumers={{
+                                        cameraVideoConsumer: consumer.cameraVideoProducer,
+                                        micAudioConsumer: consumer.micAudioProducer,
+                                        screenVideoConsumer: consumer.screenVideoProducer,
+                                        screenAudioConsumer: consumer.screenAudioProducer,
+                                    }}
                                     isMuted={false}
                                 />
                             </Grid>
