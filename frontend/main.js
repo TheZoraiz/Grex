@@ -14,8 +14,17 @@ const createWindow = () => {
         // frame: false,
         webPreferences: {
             devTools: !app.isPackaged,
+            contextIsolation: false,
             // preload: path.join(__dirname, "preload.js")
         }
+    })
+
+    window.webContents.session.setPreloads([path.join(__dirname, 'preload-get-display-media-polyfill.js')])
+    window.webContents.session.setPermissionCheckHandler(async (webContents, permission, details) => {
+        return true
+    })
+    window.webContents.session.setPermissionRequestHandler(async (webContents, permission, callback, details) => {
+        callback(true)
     })
 
     window.on("closed", () => window = null)
