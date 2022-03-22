@@ -110,7 +110,6 @@ const VideoConference = (props) => {
     
         producerTransport.on('produce', async(parameters, callback, errback) => {
             try {
-                console.log('sharingMode', sharingMode)
                 await socket.emit('transport-produce', {
                     // transportId: producerTransport.id,
                     kind: parameters.kind,

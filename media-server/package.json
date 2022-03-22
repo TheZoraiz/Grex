@@ -4,7 +4,7 @@
   "main": "server.js",
   "license": "MIT",
   "scripts": {
-    "start": "browserify public/script.js -o public/bundle.js; nodemon server.js"
+    "start": "nodemon server.js"
   },
   "dependencies": {
     "browserify": "^17.0.0",

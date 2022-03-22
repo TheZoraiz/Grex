@@ -172,7 +172,7 @@ io.on('connection', async (socket) => {
                 // Send list of participants to newly joined participant
                 io.to(socket.id).emit('other-participants', {
                     otherParticipants,
-                    streamType: sharingMode,
+                    streamType: 'all',
                 })
         
                 // Send newly joined participant's info to all other participants
@@ -188,7 +188,7 @@ io.on('connection', async (socket) => {
         if(
             sharingMode === 'screen'
             && transports[room][socket.id]['screenVideoProducer']
-            && transports[room][socket.id]['screenAudioProducer']
+            // && transports[room][socket.id]['screenAudioProducer']
         ) {
             otherParticipants = Object.keys(transports[room]).filter(id => id !== socket.id);
     
@@ -223,8 +223,33 @@ io.on('connection', async (socket) => {
                 case 'screen':
                     participantProducers = {
                         screenVideoProducer: transports[room][participantSocketId]['screenVideoProducer'],
-                        screenAudioProducer: transports[room][participantSocketId]['screenAudioProducer'],
                     }
+
+                    // Because screens may or may not have audio
+                    if(transports[room][participantSocketId]['screenAudioProducer'])
+                        participantProducers = {
+                            ...participantProducers,
+                            screenAudioProducer: transports[room][participantSocketId]['screenAudioProducer'],
+                        }
+                    break
+                
+                case 'all':
+                    participantProducers = {
+                        cameraVideoProducer: transports[room][participantSocketId]['cameraVideoProducer'],
+                        micAudioProducer: transports[room][participantSocketId]['micAudioProducer'],
+                    }
+
+                    // Because participant may or may not be sharing a screen
+                    if(transports[room][participantSocketId]['screenVideoProducer'])
+                        participantProducers = {
+                            ...participantProducers,
+                            screenVideoProducer: transports[room][participantSocketId]['screenVideoProducer'],
+                        }
+                    if(transports[room][participantSocketId]['screenAudioProducer'])
+                        participantProducers = {
+                            ...participantProducers,
+                            screenAudioProducer: transports[room][participantSocketId]['screenAudioProducer'],
+                        }
                     break
             }
 
@@ -290,7 +315,7 @@ io.on('connection', async (socket) => {
             callback({ consumerParams })            
 
         } catch(error) {
-            console.log('Error on consume', error.message)
+            console.log('Error on consuming:', error.message)
             callback({
                 params: {
                     error
