@@ -131,12 +131,20 @@ io.on('connection', async (socket) => {
 
         let producerName = ''
 
+        // Decide name of server-side producer
         switch(sharingMode) {
             case 'self':
                 if(kind === 'video')
                     producerName = 'cameraVideoProducer'
                 if(kind === 'audio')
                     producerName = 'micAudioProducer'
+                break
+            
+            case 'screen':
+                if(kind === 'video')
+                    producerName = 'screenVideoProducer'
+                if(kind === 'audio')
+                    producerName = 'screenAudioProducer'
                 break
         }
         transports[room][socket.id][producerName] = await socketProducerTransport.produce({
@@ -152,7 +160,8 @@ io.on('connection', async (socket) => {
         // Inform everyone of new participant, and new participant of other participants
         // AFTER new participant's producer has been made on server and locally
         if(
-            transports[room][socket.id]['cameraVideoProducer']
+            sharingMode === 'self'
+            && transports[room][socket.id]['cameraVideoProducer']
             && transports[room][socket.id]['micAudioProducer']
         ) {
             let otherParticipants = []
@@ -161,13 +170,34 @@ io.on('connection', async (socket) => {
     
             if(otherParticipants.length > 0) {
                 // Send list of participants to newly joined participant
-                io.to(socket.id).emit('other-participants', { otherParticipants })
+                io.to(socket.id).emit('other-participants', {
+                    otherParticipants,
+                    streamType: sharingMode,
+                })
         
                 // Send newly joined participant's info to all other participants
                 otherParticipants.forEach(socketId => {
-                    io.to(socketId).emit('new-participant', {
+                    io.to(socketId).emit('new-stream', {
                         participantSocketId: socket.id,
-                        kind
+                        streamType: sharingMode,
+                    })
+                })
+            }
+        }
+
+        if(
+            sharingMode === 'screen'
+            && transports[room][socket.id]['screenVideoProducer']
+            && transports[room][socket.id]['screenAudioProducer']
+        ) {
+            otherParticipants = Object.keys(transports[room]).filter(id => id !== socket.id);
+    
+            if(otherParticipants.length > 0) {
+                // Tell others participant is sharing screen
+                otherParticipants.forEach(socketId => {
+                    io.to(socketId).emit('new-stream', {
+                        participantSocketId: socket.id,
+                        streamType: sharingMode,
                     })
                 })
             }
@@ -178,11 +208,24 @@ io.on('connection', async (socket) => {
         callback({ id: tempProducer.id })
     })
 
-    socket.on('consume-participant', async({ rtpCapabilities, participantSocketId, room }, callback) => {
+    socket.on('consume-participant', async({ rtpCapabilities, participantSocketId, room, sharingMode }, callback) => {
         try {
-            let participantProducers = {
-                cameraVideoProducer: transports[room][participantSocketId]['cameraVideoProducer'],
-                micAudioProducer: transports[room][participantSocketId]['micAudioProducer'],
+            let participantProducers = {}
+
+            switch(sharingMode) {
+                case 'self':
+                    participantProducers = {
+                        cameraVideoProducer: transports[room][participantSocketId]['cameraVideoProducer'],
+                        micAudioProducer: transports[room][participantSocketId]['micAudioProducer'],
+                    }
+                    break
+
+                case 'screen':
+                    participantProducers = {
+                        screenVideoProducer: transports[room][participantSocketId]['screenVideoProducer'],
+                        screenAudioProducer: transports[room][participantSocketId]['screenAudioProducer'],
+                    }
+                    break
             }
 
             let consumerParams = []
@@ -236,27 +279,6 @@ io.on('connection', async (socket) => {
                         producerType,
                         participantSocketId,
                     })
-    
-                    // io.to(socket.id).emit('consume-made', {
-                    //     params: {
-                    //         id: tempConsumer.id,
-                    //         producerId: tempProducer.id,
-                    //         kind: tempConsumer.kind,
-                    //         rtpParameters: tempConsumer.rtpParameters,
-                    //         producerType,
-                    //         participantSocketId,
-                    //     }
-                    // })
-                    // callback({
-                    //     params: {
-                    //         id: tempConsumer.id,
-                    //         producerId: tempProducer.id,
-                    //         kind: tempConsumer.kind,
-                    //         rtpParameters: tempConsumer.rtpParameters,
-                    //         producerType,
-                    //         participantSocketId,
-                    //     }
-                    // })
     
                 } else {
                     // Tell participant that this specific producer cannot be consumed

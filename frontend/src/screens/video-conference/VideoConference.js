@@ -1,36 +1,35 @@
 import React, { useState, useEffect, useRef } from 'react'
 import {
     Typography,
-    Grid
+    Grid,
+    Button
 } from '@mui/material'
 import { makeStyles } from '@mui/styles'
 import * as mediasoupClient from 'mediasoup-client'
 import { useSelector } from 'react-redux'
 import { io } from 'socket.io-client'
 
-import VideoComponent from './VideoComponent'
-
-const useStyles = makeStyles(theme => ({
-    video: {
-        transform: 'scaleX(-1)',
-        borderRadius: 10,
-    }
-}))
+import ParticipantWindow from './ParticipantWindow'
 
 const videoConstraints = {
     video: {
         width: { max: 640 },
         height: { max: 480 },
+        // facingMode: { exact: 'user' }
     },
     audio: {
-        echoCancellation: true
+        echoCancellation: true,
+        noiseSuppression: true,
     }
 }
 
 const screenConstraints = {
     video: {
-        cursor: 'always' | 'motion' | 'never',
-        displaySurface: 'application' | 'browser' | 'monitor' | 'window',
+        cursor: 'always',
+        displaySurface: 'application',
+    },
+    audio: {
+        echoCancellation: true,
     }
 }
 
@@ -61,6 +60,10 @@ let globalParams = {
 // To be updated with global params
 let cameraParams = {}
 let micParams = {}
+let screenVideoParams = {}
+let screenAudioParams = {}
+
+let sharingMode = 'self'
 
 let device = null
 let producerTransport = null
@@ -68,20 +71,24 @@ let consumerTransport = null
 let tempConsumers = {}
 
 const VideoConference = (props) => {
-	const classes = useStyles()
 
     const { username, joinRoom } = useSelector(state => state.user)
     const [socket, setSocket] = useState(null)
     const [localStream, setLocalStream] = useState(null);
+    const [localScreenShareStream, setLocalScreenShareStream] = useState(null);
     const [routerRtpCapabilities, setRouterRtpCapabilities] = useState(null)
     // const [device, setDevice] = useState(null)
     const [error, setError] = useState('')
 
-    const [sharingMode, setSharingMode] = useState('self');
-
+    // Producers
     const [cameraVideoProducer, setCameraVideoProducer] = useState(null)
     const [micAudioProducer, setMicAudioProducer] = useState(null)
+    const [screenVideoProducer, setScreenVideoProducer] = useState(null)
+    const [screenAudioProducer, setScreenAudioProducer] = useState(null)
+
+    // Consumers hashmap
     const [consumers, setConsumers] = useState({});
+    const consumersRef = useRef(consumers);
 
     const assignProducerTransportEvents = () => {
         producerTransport.on('connect', async({ dtlsParameters }, callback, errback) => {
@@ -103,6 +110,7 @@ const VideoConference = (props) => {
     
         producerTransport.on('produce', async(parameters, callback, errback) => {
             try {
+                console.log('sharingMode', sharingMode)
                 await socket.emit('transport-produce', {
                     // transportId: producerTransport.id,
                     kind: parameters.kind,
@@ -122,26 +130,25 @@ const VideoConference = (props) => {
         })
     }
 
-    const assignProducerEvents = () => {
-        cameraVideoProducer.on('trackended', () => {
-            // Close video track
-            console.log('Track ended...')
-        })
-    
-        cameraVideoProducer.on('transportclose', () => {
-            // Close video track
-            console.log('Transport closed...')
-        })
+    const assignProducerEvents = (streamType) => {
+        const trackEnded = () => console.log('Track ended...')
+        const transportClose = () => console.log('Transport closed...')
 
-        micAudioProducer.on('trackended', () => {
-            // Close video track
-            console.log('Track ended...')
-        })
-    
-        micAudioProducer.on('transportclose', () => {
-            // Close video track
-            console.log('Transport closed...')
-        })
+        switch(streamType) {
+            case 'self':
+                cameraVideoProducer.on('trackended', trackEnded)
+                cameraVideoProducer.on('transportclose', transportClose)
+                micAudioProducer.on('trackended', trackEnded)
+                micAudioProducer.on('transportclose', transportClose)
+                break
+
+            case 'screen':
+                screenVideoProducer.on('trackended', trackEnded)
+                screenVideoProducer.on('transportclose', transportClose)
+                screenAudioProducer.on('trackended', trackEnded)
+                screenAudioProducer.on('transportclose', transportClose)
+                break
+        }
     }
 
     const assignConsumerTransportEvents = (consumerTransportId) => {
@@ -164,16 +171,37 @@ const VideoConference = (props) => {
         })
     }
 
-    const consumeParticipant = (participantSocketId) => {
+    const getScreenShare = async() => {
+        sharingMode = 'screen'
+        
+        let stream = await navigator.mediaDevices.getDisplayMedia(screenConstraints);
+        setLocalScreenShareStream(stream)
+    
+        let screenVideoTrack = stream.getVideoTracks()[0]
+        let screenAudioTrack = stream.getAudioTracks()[0]
+    
+        screenVideoParams = {
+            track: screenVideoTrack,
+            ...globalParams,
+        }
+        screenAudioParams = {
+            track: screenAudioTrack,
+            ...globalParams,
+        }
+        
+        setScreenVideoProducer(await producerTransport.produce(screenVideoParams))
+        setScreenAudioProducer(await producerTransport.produce(screenAudioParams))
+    }
+
+    const consumeParticipant = (participantSocketId, streamType) => {
         return new Promise(async(resolve, reject) => {
             await socket.emit('consume-participant', {
                 rtpCapabilities: device.rtpCapabilities,
                 participantSocketId,
                 room: joinRoom,
+                sharingMode: streamType
             
             }, async({ consumerParams }) => {
-
-                console.log('consumerParams', consumerParams)
 
                 for(let i = 0; i < consumerParams.length; i++) {
                     let params = consumerParams[i]
@@ -240,9 +268,14 @@ const VideoConference = (props) => {
 
     useEffect(() => {
         if(cameraVideoProducer && micAudioProducer)
-            assignProducerEvents()
-
+            assignProducerEvents('self')
     }, [cameraVideoProducer, micAudioProducer])
+
+
+    useEffect(() => {
+        if(screenVideoProducer && screenAudioProducer)
+            assignProducerEvents('screen')
+    }, [screenVideoProducer, screenAudioProducer])
     
     useEffect(() => {
         setSocket(io(process.env.REACT_APP_MEDIA_SERVER_SOCKET_URL))
@@ -268,63 +301,43 @@ const VideoConference = (props) => {
                 }
             })
 
-            socket.on('other-participants', async({ otherParticipants }) => {
-                for(let i = 0; i < otherParticipants.length; i++) {
-                    await consumeParticipant(otherParticipants[i])
-                }
-
-                console.log('tempConsumers', tempConsumers)
-                setConsumers(currConsumers => ({
-                    ...currConsumers,
-                    ...tempConsumers,
-                }))
-                tempConsumers = {}
-            })
-
-            socket.on('new-participant', async({ participantSocketId }) => {
-                console.log('New participant', participantSocketId)
-                await consumeParticipant(participantSocketId)
-
-                console.log('tempConsumers', tempConsumers)
-                setConsumers(currConsumers => ({
-                    ...currConsumers,
-                    ...tempConsumers,
-                }))
-                tempConsumers = {}
-            })
-
-            socket.on('consume-made', async({ params }) => {
-                if(params && params.error) {
-                    console.log(params.error)
-                    return
-                }
+            socket.on('other-participants', async({ otherParticipants, streamType }) => {
+                tempConsumers = { ...tempConsumers, ...consumersRef.current }
                 
-                let tempConsumer = await consumerTransport.consume({
-                    id: params.id,
-                    producerId: params.producerId,
-                    kind: params.kind,
-                    rtpParameters: params.rtpParameters
-                })
-        
-                console.log('Consumer made:', tempConsumer)
-        
-                // Tell server to resume this specific consumer
-                await socket.emit('consumer-resume', {
-                    room: joinRoom,
-                    participantSocketId: params.participantSocketId,
-                    producerType: params.producerType,
-                }, () => {
-                    tempConsumers[params.participantSocketId] = {
-                        ...tempConsumers[params.participantSocketId],
-                        [params.producerType]: tempConsumer,
+                for(let i = 0; i < otherParticipants.length; i++) {
+                    await consumeParticipant(otherParticipants[i], streamType)
+                }
+
+                setConsumers(currConsumers => {
+                    let newConsumers = {
+                        ...currConsumers,
+                        ...tempConsumers,
                     }
+                    consumersRef.current = newConsumers
+                    return newConsumers
                 })
+                tempConsumers = {}
+            })
+
+            socket.on('new-stream', async({ participantSocketId, streamType }) => {
+                tempConsumers = { ...tempConsumers, ...consumersRef.current }
+
+                await consumeParticipant(participantSocketId, streamType)
+
+                setConsumers(currConsumers => {
+                    let newConsumers = {
+                        ...currConsumers,
+                        ...tempConsumers,
+                    }
+                    consumersRef.current = newConsumers
+                    return newConsumers
+                })
+                tempConsumers = {}
             })
 
             // new-participant is still left !!
     
             let stream = await navigator.mediaDevices.getUserMedia(videoConstraints)
-            // let stream = await navigator.mediaDevices.getDisplayMedia(screenConstraints);
             setLocalStream(stream)
         
             let cameraVideoTrack = stream.getVideoTracks()[0]
@@ -345,22 +358,14 @@ const VideoConference = (props) => {
 
     return (
         <div className='w-full flex flex-col justify-center'>
-            {/* <Typography>
-                { username }
-            </Typography>
-
-            <Typography>
-                { joinRoom }
-            </Typography> */}
-
             <div className='mx-5 my-3'>
                 <Grid container spacing={3}>
                     <Grid item xs={6} sm={4}>
                         {localStream && (
-                            <VideoComponent 
+                            <ParticipantWindow 
                                 id="local"
-                                stream={localStream}
-                                className={classes.video}
+                                selfStream={localStream}
+                                screenStream={localScreenShareStream}
                                 isMuted={true}
                             />
                         )}
@@ -368,28 +373,31 @@ const VideoConference = (props) => {
                     {Object.values(consumers).map(consumer => {
                         console.log('Total consumers', consumers)
 
-                        if(!consumer.cameraVideoProducer || !consumer.micAudioProducer)
-                            return null
-                        
-                        let { track: cameraVideoTrack } = consumer.cameraVideoProducer
-                        let { track: micAudioTrack } = consumer.micAudioProducer
-
-                        let tracks = {
-                            cameraVideoTrack,
-                            micAudioTrack,
+                        let participantConsumers = {
+                            cameraVideoConsumer: consumer.cameraVideoProducer,
+                            micAudioConsumer: consumer.micAudioProducer,
+                            screenVideoConsumer: consumer.screenVideoTrack,
+                            screenAudioConsumer: consumer.screenAudioTrack,
                         }
-
+                        
                         return (
-                            <Grid item xs={6} sm={4}>
-                                <VideoComponent
-                                    tracks={tracks}
-                                    className={classes.video}
+                            <Grid item xs={6} sm={4} key={consumers}>
+                                <ParticipantWindow
+                                    consumers={participantConsumers}
                                     isMuted={false}
                                 />
                             </Grid>
                         )
                     })}
                 </Grid>
+                <Button
+                    variant='contained'
+                    color='primary'
+                    onClick={() => getScreenShare()}
+                    className='normal-case m-5'
+                >
+                    Share Screen
+                </Button>
             </div>
         </div>
     )
