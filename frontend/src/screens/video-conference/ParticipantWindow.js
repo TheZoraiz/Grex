@@ -1,15 +1,21 @@
 import React, { useEffect, useState, useRef } from 'react'
-import { Grid } from '@mui/material'
+import { Grid, Typography } from '@mui/material'
 import { makeStyles } from '@mui/styles'
+import clsx from 'clsx'
 
 const useStyles = makeStyles(theme => ({
     participantContainer: {
         backgroundColor: '#1e1e28',
         overflow: 'hidden',
         borderRadius: 10,
+        height: '100%',
     },
     videoFlip: {
         transform: 'scaleX(-1)',
+    },
+    buttomPane: {
+        backgroundColor: 'black',
+        height: '20%',
     },
 }))
 
@@ -26,8 +32,6 @@ const ParticipantWindow = (props) => {
         if(props.consumers) {
             let tempSelfStream = null
             let tempScreenStream = null
-
-            console.log('props.consumers', props.consumers)
 
             Object.keys(props.consumers).forEach(consumerName => {
                 if(!props.consumers[consumerName])
@@ -74,26 +78,31 @@ const ParticipantWindow = (props) => {
     return (
         <Grid container className={classes.participantContainer}>
             {selfStream && (
-                <Grid item xs={6} className='flex justify-center items-center'>
+                <Grid item xs={screenStream ? 6 : 12} className='flex justify-center items-center' style={{ height: '80%' }}>
                     <video
                         id={props.id}
                         autoPlay
                         ref={partSelfVidEl}
-                        className={classes.videoFlip}
+                        className={clsx('h-full', classes.videoFlip)}
                         muted={props.isMuted}
                     />
                 </Grid>
             )}
             {screenStream && (
-                <Grid item xs={6} className='flex justify-center items-center'>
+                <Grid item xs={selfStream ? 6 : 12} className='flex justify-center items-center' style={{ height: '80%' }}>
                     <video
-                        id={props.id}
                         autoPlay
                         ref={partScreenVidEl}
                         muted={props.isMuted}
+                        className='h-full'
                     />
                 </Grid>
             )}
+            <div className={clsx('w-full p-3', classes.buttomPane)}>
+                <Typography>
+                    { props.username }
+                </Typography>
+            </div>
         </Grid>
     )
 }

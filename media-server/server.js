@@ -93,10 +93,11 @@ io.on('connection', async (socket) => {
         })
     })
 
-    socket.on('web-rtc-transport', async ({ room }, callback) => {
+    socket.on('web-rtc-transport', async ({ room, username }, callback) => {
         transports[room] = {
             ...transports[room],
             [socket.id]: {
+                username,
                 producerTransport: await createWebRtcTransport(room, socket.id, callback),
                 consumerTransport: await createWebRtcTransport(room, socket.id, undefined),
             }
@@ -255,6 +256,8 @@ io.on('connection', async (socket) => {
 
             let consumerParams = []
 
+            let participantUsername = transports[room][participantSocketId]['username']
+
             let participantProducerTypes = Object.keys(participantProducers)
 
             for(let i = 0; i < participantProducerTypes.length; i++) {
@@ -303,6 +306,7 @@ io.on('connection', async (socket) => {
                         rtpParameters: tempConsumer.rtpParameters,
                         producerType,
                         participantSocketId,
+                        participantUsername,
                     })
     
                 } else {
@@ -335,6 +339,8 @@ io.on('connection', async (socket) => {
         Object.keys(transports).forEach(room => {
             delete transports[room][socket.id]
         })
+
+        socket.broadcast.emit('participant-disconnected', socket.id)
     })
 })
 

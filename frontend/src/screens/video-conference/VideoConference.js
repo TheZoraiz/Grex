@@ -2,12 +2,15 @@ import React, { useState, useEffect, useRef } from 'react'
 import {
     Typography,
     Grid,
-    Button
+    Button,
+    IconButton,
 } from '@mui/material'
+import { ScreenShare as ScreenShareIcon } from '@mui/icons-material';
 import { makeStyles } from '@mui/styles'
 import * as mediasoupClient from 'mediasoup-client'
 import { useSelector } from 'react-redux'
 import { io } from 'socket.io-client'
+import clsx from 'clsx'
 
 import ParticipantWindow from './ParticipantWindow'
 
@@ -70,7 +73,28 @@ let producerTransport = null
 let consumerTransport = null
 let tempConsumers = {}
 
+const useStyles = makeStyles(theme => ({
+    participantsContainer: {
+        height: '85vh',
+    },
+    controlsPane: {
+        height: '10vh',
+    },
+    controlsContainer: {
+        backgroundColor: '#3C3C3C',
+        borderRadius: 100,
+        boxShadow: '10px 10px 15px'
+    },
+    controlIcon: {
+        backgroundColor: `${theme.palette.primary.main} !important`,
+    },
+    participantWindow: {
+        maxHeight: 250,
+    },
+}))
+
 const VideoConference = (props) => {
+    const classes = useStyles()
 
     const { username, joinRoom } = useSelector(state => state.user)
     const [socket, setSocket] = useState(null)
@@ -202,6 +226,8 @@ const VideoConference = (props) => {
             
             }, async({ consumerParams }) => {
 
+                console.log('consumerParams', consumerParams)
+
                 for(let i = 0; i < consumerParams.length; i++) {
                     let params = consumerParams[i]
 
@@ -228,6 +254,7 @@ const VideoConference = (props) => {
                         tempConsumers[params.participantSocketId] = {
                             ...tempConsumers[params.participantSocketId],
                             [params.producerType]: tempConsumer,
+                            username: params.participantUsername
                         }
 
                         if(i === consumerParams.length - 1)
@@ -245,7 +272,7 @@ const VideoConference = (props) => {
             await device.load({ routerRtpCapabilities })
             console.log('Device created', device)
 
-            socket.emit('web-rtc-transport', { room: joinRoom }, async({ params }) => {
+            socket.emit('web-rtc-transport', { room: joinRoom, username }, async({ params }) => {
                 // Callback fires when we get transport parameters on the server-side after it's created
                 if(params.error) {
                     setError(params.error)
@@ -334,6 +361,16 @@ const VideoConference = (props) => {
                 tempConsumers = {}
             })
 
+            socket.on('participant-disconnected', (disconnectedSocketId) => {
+                setConsumers(currConsumers => {
+                    let newConsumers = { ...currConsumers }
+                    delete newConsumers[disconnectedSocketId]
+
+                    consumersRef.current = newConsumers
+                    return newConsumers
+                })
+            })
+
             // new-participant is still left !!
     
             let stream = await navigator.mediaDevices.getUserMedia(videoConstraints)
@@ -357,24 +394,26 @@ const VideoConference = (props) => {
 
     return (
         <div className='w-full flex flex-col justify-center'>
-            <div className='mx-5 my-3'>
+            <div className={clsx('mx-5 my-3', classes.participantsContainer)}>
                 <Grid container spacing={3}>
-                    <Grid item xs={6} sm={4}>
+                    <Grid item xs={6} sm={4} className={classes.participantWindow}>
                         {localStream && (
                             <ParticipantWindow 
                                 id="local"
+                                username={username}
                                 selfStream={localStream}
                                 screenStream={localScreenShareStream}
                                 isMuted={true}
                             />
                         )}
                     </Grid>
-                    {Object.values(consumersRef.current).map(consumer => {
+                    {Object.values(consumers).map(consumer => {
                         console.log('Total consumers', consumers)
                         
                         return (
-                            <Grid item xs={6} sm={4} key={consumer}>
+                            <Grid item xs={6} sm={4} key={consumer} className={classes.participantWindow}>
                                 <ParticipantWindow
+                                    username={consumer.username}
                                     consumers={{
                                         cameraVideoConsumer: consumer.cameraVideoProducer,
                                         micAudioConsumer: consumer.micAudioProducer,
@@ -387,14 +426,17 @@ const VideoConference = (props) => {
                         )
                     })}
                 </Grid>
-                <Button
-                    variant='contained'
-                    color='primary'
-                    onClick={() => getScreenShare()}
-                    className='normal-case m-5'
-                >
-                    Share Screen
-                </Button>
+            </div>
+            <div className={clsx('flex justify-center items-center', classes.controlsPane)}>
+                <div className={clsx('p-2', classes.controlsContainer)}>
+                    <IconButton
+                        color='primary'
+                        className={classes.controlIcon}
+                        onClick={() => getScreenShare()}
+                    >
+                        <ScreenShareIcon htmlColor='#3C3C3C' />
+                    </IconButton>
+                </div>
             </div>
         </div>
     )
