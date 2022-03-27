@@ -147,11 +147,34 @@ io.on('connection', async (socket) => {
                 if(kind === 'audio')
                     producerName = 'screenAudioProducer'
                 break
+
+            case 'projection':
+                if(kind === 'video')
+                    producerName = 'projectionVideoProducer'
+                if(kind === 'audio')
+                    producerName = 'projectionAudioProducer'
+                break
         }
-        transports[room][socket.id][producerName] = await socketProducerTransport.produce({
-            kind, rtpParameters
-        })
-        let tempProducer = transports[room][socket.id][producerName]
+
+        let tempProducer
+
+        if(sharingMode === 'projection') {
+            if(!transports[room]['projection'])
+                transports[room]['projection'] = {}
+
+            transports[room]['projection']['username'] = transports[room][socket.id]['username']
+            transports[room]['projection']['userSocketId'] = socket.id
+            transports[room]['projection'][producerName] = await socketProducerTransport.produce({
+                kind, rtpParameters
+            })
+            tempProducer = transports[room]['projection'][producerName]
+
+        } else {
+            transports[room][socket.id][producerName] = await socketProducerTransport.produce({
+                kind, rtpParameters
+            })
+            tempProducer = transports[room][socket.id][producerName]
+        }
 
         tempProducer.on('transportclose', () => {
             console.log('Transport for', socket.id, 'has closed')
@@ -167,7 +190,7 @@ io.on('connection', async (socket) => {
         ) {
             let otherParticipants = []
     
-            otherParticipants = Object.keys(transports[room]).filter(id => id !== socket.id);
+            otherParticipants = Object.keys(transports[room]).filter(id => id !== socket.id && id !== 'projection');
     
             if(otherParticipants.length > 0) {
                 // Send list of participants to newly joined participant
@@ -175,6 +198,14 @@ io.on('connection', async (socket) => {
                     otherParticipants,
                     streamType: 'all',
                 })
+
+                // Tell new participant that a screen is being projected
+                if(transports[room]['projection']) {
+                    io.to(socket.id).emit('new-stream', {
+                        otherParticipants,
+                        streamType: 'projection',
+                    })
+                }
         
                 // Send newly joined participant's info to all other participants
                 otherParticipants.forEach(socketId => {
@@ -187,19 +218,33 @@ io.on('connection', async (socket) => {
         }
 
         if(
-            sharingMode === 'screen'
-            && transports[room][socket.id]['screenVideoProducer']
+            (sharingMode === 'screen' && transports[room][socket.id]['screenVideoProducer'])
+            || (sharingMode === 'projection' && transports[room]['projection']['projectionVideoProducer'])
             // && transports[room][socket.id]['screenAudioProducer']
         ) {
             otherParticipants = Object.keys(transports[room]).filter(id => id !== socket.id);
     
             if(otherParticipants.length > 0) {
-                // Tell others participant is sharing screen
+                // Tell others participant that participant is sharing screen
                 otherParticipants.forEach(socketId => {
                     io.to(socketId).emit('new-stream', {
                         participantSocketId: socket.id,
                         streamType: sharingMode,
                     })
+                })
+            }
+        }
+
+        if(
+            sharingMode === 'projection'
+            && transports[room]['projection']['projectionVideoProducer']
+        ) {
+            otherParticipants = Object.keys(transports[room]).filter(id => id !== socket.id);
+    
+            if(otherParticipants.length > 0) {
+                // Tell others participant that participant is projecting screen
+                socket.broadcast.emit('projecting', {
+                    streamType: sharingMode,
                 })
             }
         }
@@ -233,6 +278,17 @@ io.on('connection', async (socket) => {
                             screenAudioProducer: transports[room][participantSocketId]['screenAudioProducer'],
                         }
                     break
+
+                case 'projection':
+                    participantProducers = {
+                        projectionVideoProducer: transports[room]['projection']['projectionVideoProducer'],
+                    }
+                    if(transports[room]['projection']['projectionAudioProducer'])
+                        participantProducers = {
+                            ...participantProducers,
+                            projectionAudioProducer: transports[room]['projection']['projectionAudioProducer'],
+                        }
+                    break
                 
                 case 'all':
                     participantProducers = {
@@ -255,8 +311,14 @@ io.on('connection', async (socket) => {
             }
 
             let consumerParams = []
+            let participantUsername = ''
 
-            let participantUsername = transports[room][participantSocketId]['username']
+            console.log(socket.id, 'asking for', sharingMode, 'from', participantSocketId, 'and', participantProducers)
+
+            if(sharingMode === 'projection')
+                participantUsername = transports[room]['projection']['username']
+            else
+                participantUsername = transports[room][participantSocketId]['username']
 
             let participantProducerTypes = Object.keys(participantProducers)
 
@@ -284,9 +346,17 @@ io.on('connection', async (socket) => {
                         paused: true
                     })
     
-                    transports[room][socket.id].consumersList[participantSocketId] = {
-                        ...transports[room][socket.id].consumersList[participantSocketId],
-                        [producerType]: tempConsumer,
+
+                    if(sharingMode === 'projection') {
+                        transports[room][socket.id].consumersList = {
+                            ...transports[room][socket.id].consumersList,
+                            [producerType]: tempConsumer,
+                        }
+                    } else {
+                        transports[room][socket.id].consumersList[participantSocketId] = {
+                            ...transports[room][socket.id].consumersList[participantSocketId],
+                            [producerType]: tempConsumer,
+                        }
                     }
             
                     console.log('transports', transports)
@@ -328,9 +398,25 @@ io.on('connection', async (socket) => {
         }
     })
 
-    socket.on('consumer-resume', async({ room, participantSocketId, producerType }, callback) => {
-        transports[room][socket.id].consumersList[participantSocketId][producerType].resume()
+    socket.on('consumer-resume', async({ room, participantSocketId, producerType, projection }, callback) => {
+        if(projection)
+            transports[room][socket.id].consumersList[producerType].resume()
+        else
+            transports[room][socket.id].consumersList[participantSocketId][producerType].resume()
         callback()
+    })
+
+    socket.on('can-project-screen', async({ room }, callback) => {
+        if(transports[room]['projection'])
+            callback({
+                projectionExists: true,
+                projectingUser: transports[room]['projection']['username'],
+            })
+        else
+            callback({
+                projectionExists: false,
+                projectingUser: null,
+            })
     })
 
     socket.on('disconnect', () => {
@@ -338,6 +424,18 @@ io.on('connection', async (socket) => {
 
         Object.keys(transports).forEach(room => {
             delete transports[room][socket.id]
+
+            if(transports[room]['projection'] && transports[room]['projection']['userSocketId'] === socket.id) {
+                let projectingUsername = transports[room]['projection']['username']
+                delete transports[room]['projection']
+
+                Object.keys(transports[room]).forEach(socketId => {
+                    delete transports[room][socketId].consumersList.projectionVideoProducer
+                    delete transports[room][socketId].consumersList.projectionAudioProducer
+                })
+
+                socket.to(room).emit('projection-stopped', projectingUsername)
+            }
         })
 
         socket.broadcast.emit('participant-disconnected', socket.id)
