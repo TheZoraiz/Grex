@@ -461,15 +461,18 @@ const VideoConference = (props) => {
 
                 await consumeParticipant(participantSocketId, streamType)
 
-                setConsumers(currConsumers => {
-                    let newConsumers = {
-                        ...currConsumers,
-                        ...tempConsumers,
-                    }
-                    consumersRef.current = newConsumers
-                    return newConsumers
-                })
-                tempConsumers = {}
+                if(streamType !== 'projection') {
+                    setConsumers(currConsumers => {
+                        let newConsumers = {
+                            ...currConsumers,
+                            ...tempConsumers,
+                        }
+                        consumersRef.current = newConsumers
+                        return newConsumers
+                    })
+
+                    tempConsumers = {}
+                }
             })
 
             socket.on('participant-disconnected', (disconnectedSocketId) => {
@@ -541,7 +544,7 @@ const VideoConference = (props) => {
         socket.emit('can-project-screen', { room: joinRoom }, ({ projectionExists, projectingUser }) => {
             if(projectionExists) {
                 setSnackbarInfo({
-                    message: `${projectingUser} is already projecting to this session`,
+                    message: projectingUser === username ? 'You are already projecting to this session' : `${projectingUser} is already projecting to this session`,
                     severity: 'error',
                 })
                 setSnackbarOpen(true)
@@ -556,7 +559,7 @@ const VideoConference = (props) => {
         <div className='w-full flex flex-col justify-center'>
             <div className={clsx('flex mx-5 my-3', classes.participantsContainer)}>
                 {(Boolean(localProjectionStream) || projectionVideoConsumer) && (
-                    <div className='flex flex-col justify-center items-center' style={{ flex: 1 }}>
+                    <div className='flex flex-col justify-center items-center pr-2' style={{ flex: 1 }}>
                         <video
                             autoPlay
                             ref={projectionVidEl}
@@ -568,7 +571,7 @@ const VideoConference = (props) => {
                         </Typography>
                     </div>
                 )}
-                <Grid container spacing={3} style={{ flex: 1 }}>
+                <Grid container spacing={3} style={{ flex: 1, marginLeft: '0.5 rem' }}>
                     <Grid item xs={6} sm={4} className={classes.participantWindow}>
                         {localStream && (
                             <ParticipantWindow 
