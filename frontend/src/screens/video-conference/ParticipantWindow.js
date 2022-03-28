@@ -59,11 +59,10 @@ const ParticipantWindow = (props) => {
         }
         
         if(props.id === 'local') {
-            if(props.selfStream)
-                setSelfStream(props.selfStream)
-            if(props.screenStream)
-                setScreenStream(props.screenStream)
+            setSelfStream(props.selfStream)
+            setScreenStream(props.screenStream)
         }
+
     }, [props.consumers, props.selfStream, props.screenStream])
 
     useEffect(() => {

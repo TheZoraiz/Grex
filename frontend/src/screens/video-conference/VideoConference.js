@@ -13,11 +13,11 @@ import {
     Alert,
 } from '@mui/material'
 import { tooltipClasses } from '@mui/material/Tooltip'
-import MuiAlert from '@mui/material/Alert'
 import {
     ScreenShare as ScreenShareIcon,
     SmartDisplay as ProjectScreenIcon,
-    Close as CloseIcon,
+    Mic as MicIcon,
+    Videocam as VideocamIcon
 } from '@mui/icons-material';
 import { makeStyles, styled } from '@mui/styles'
 import * as mediasoupClient from 'mediasoup-client'
@@ -103,8 +103,15 @@ const useStyles = makeStyles(theme => ({
     controlIcon: {
         backgroundColor: `${theme.palette.primary.main} !important`,
     },
+    controlIconStop: {
+        backgroundColor: `#E94335 !important`,
+    },
     participantWindow: {
         maxHeight: 250,
+    },
+    projectionVideoStyle: {
+        borderRadius: 10,
+        boxShadow: '0 0 10px'
     },
 }))
 
@@ -117,10 +124,6 @@ const CustomTooltip = styled(({ className, ...props }) => (
     },
 });
 
-const SnackbarAlert = React.forwardRef(function Alert(props, ref) {
-    return <MuiAlert elevation={6} ref={ref} variant="filled" {...props} />;
-});
-
 const VideoConference = (props) => {
     const classes = useStyles()
 
@@ -129,6 +132,7 @@ const VideoConference = (props) => {
     const [localStream, setLocalStream] = useState(null);
     const [localScreenShareStream, setLocalScreenShareStream] = useState(null);
     const [localProjectionStream, setLocalProjectionStream] = useState(null);
+
     const [routerRtpCapabilities, setRouterRtpCapabilities] = useState(null)
     // const [device, setDevice] = useState(null)
     const [error, setError] = useState('')
@@ -141,20 +145,25 @@ const VideoConference = (props) => {
     const [projectionVideoProducer, setProjectionVideoProducer] = useState(null)
     const [projectionAudioProducer, setProjectionAudioProducer] = useState(null)
 
+    const [cameraPaused, setCameraPaused] = useState(false)
+    const [micPaused, setMicPaused] = useState(false)
+
     const [snackbarInfo, setSnackbarInfo] = useState({
         message: '',
         severity: '',
     })
     const [snackbarOpen, setSnackbarOpen] = useState(false)
-    const [anchorEl, setAnchorEl] = React.useState(null);
+    const [anchorEl, setAnchorEl] = React.useState(null)
 
     // Consumers hashmap
-    const [consumers, setConsumers] = useState({});
-    const consumersRef = useRef(consumers);
+    const [consumers, setConsumers] = useState({})
+    const consumersRef = useRef(consumers)
 
-    const [projectingUsername, setProjectingUsername] = useState('');
-    const [projectionVideoConsumer, setProjectionVideoConsumer] = useState(null);
-    const [projectionAudioConsumer, setProjectionAudioConsumer] = useState(null);
+    const [projectingUsername, setProjectingUsername] = useState('')
+    const [projectionVideoConsumer, setProjectionVideoConsumer] = useState(null)
+    const [projectionAudioConsumer, setProjectionAudioConsumer] = useState(null)
+
+    const [sessionLog, setSessionLog] = useState([])
 
 	const projectionVidEl = useRef(null);
 
@@ -476,10 +485,9 @@ const VideoConference = (props) => {
             })
 
             socket.on('participant-disconnected', (disconnectedSocketId) => {
-                setSnackbarInfo({
-                    message: `${consumersRef.current[disconnectedSocketId].username} has left the session`,
-                    severity: 'info',
-                })
+                let infoMessage = `${consumersRef.current[disconnectedSocketId].username} has left the session`
+                setSnackbarInfo({ message: infoMessage, severity: 'info' })
+                setSessionLog(currSessionLog => [...currSessionLog, infoMessage])
 
                 setConsumers(currConsumers => {
                     let newConsumers = { ...currConsumers }
@@ -492,17 +500,34 @@ const VideoConference = (props) => {
                 setSnackbarOpen(true)
             })
 
+            socket.on('participant-stopped-screenshare', ({ participantSocketId }) => {
+                let infoMessage = `${consumersRef.current[participantSocketId].username} stopped sharing screen`
+                setSnackbarInfo({ message: infoMessage, severity: 'info' })
+                setSessionLog(currSessionLog => [...currSessionLog, infoMessage])
+
+                setConsumers(currConsumers => {
+                    let newConsumers = { ...currConsumers }
+                    delete newConsumers[participantSocketId].screenVideoProducer
+                    delete newConsumers[participantSocketId].screenAudioProducer
+
+                    consumersRef.current = newConsumers
+                    return newConsumers
+                })
+
+                setSnackbarOpen(true)
+            })
+
             socket.on('projection-stopped', (projectingUsername) => {
                 setLocalProjectionStream(null)
                 setProjectionVideoProducer(null)
-                setProjectionVideoProducer(null)
+                setProjectionAudioProducer(null)
                 setProjectionVideoConsumer(null)
-                setProjectionVideoConsumer(null)
+                setProjectionAudioConsumer(null)
 
-                setSnackbarInfo({
-                    message: `${projectingUsername} has stopped projecting the screen`,
-                    severity: 'info',
-                })
+                let infoMessage = `${projectingUsername} has stopped projecting the screen`
+                setSnackbarInfo({ message: infoMessage, severity: 'info' })
+                setSessionLog(currSessionLog => [...currSessionLog, infoMessage])
+
                 setSnackbarOpen(true)
             })
 
@@ -543,16 +568,50 @@ const VideoConference = (props) => {
     const projectShareClick = () => {
         socket.emit('can-project-screen', { room: joinRoom }, ({ projectionExists, projectingUser }) => {
             if(projectionExists) {
-                setSnackbarInfo({
-                    message: projectingUser === username ? 'You are already projecting to this session' : `${projectingUser} is already projecting to this session`,
-                    severity: 'error',
-                })
+
+                let infoMessage = projectingUser === username ? 'You are already projecting to this session' : `${projectingUser} is already projecting to this session`
+                setSnackbarInfo({ message: infoMessage, severity: 'error' })
+                setSessionLog([...sessionLog, infoMessage])
+                
                 setSnackbarOpen(true)
             } else {
                 getScreenProjection()
                 setAnchorEl(null)
             }
         })
+    }
+
+    // Works for projection as well
+    const stopSharingScreen = () => {
+        if(window.confirm('Stop sharing screen?')) {
+            if(localScreenShareStream) {
+                localScreenShareStream.getTracks().forEach(track => track.stop())
+
+                setLocalScreenShareStream(null)
+                socket.emit('stopped-screenshare', { room: joinRoom })
+            }
+
+            if(localProjectionStream) {
+                localProjectionStream.getTracks().forEach(track => track.stop())
+
+                setLocalProjectionStream(null)
+                socket.emit('stopped-projecting', { room: joinRoom })
+            }
+        }
+    }
+
+    const toggleSelfStream = (type) => {
+        switch(type) {
+            case 'camera':
+                cameraVideoProducer.paused ? cameraVideoProducer.resume() : cameraVideoProducer.pause()
+                setCameraPaused(cameraVideoProducer.paused)
+                break
+
+            case 'mic':
+                micAudioProducer.paused ? micAudioProducer.resume() : micAudioProducer.pause()
+                setMicPaused(micAudioProducer.paused)
+                break
+        }
     }
 
     return (
@@ -563,7 +622,7 @@ const VideoConference = (props) => {
                         <video
                             autoPlay
                             ref={projectionVidEl}
-                            className='w-full'
+                            className={clsx('w-full', classes.projectionVideoStyle)}
                             muted={Boolean(localProjectionStream)}
                         />
                         <Typography className='text-center my-3' variant='h6'>
@@ -571,21 +630,18 @@ const VideoConference = (props) => {
                         </Typography>
                     </div>
                 )}
-                <Grid container spacing={3} style={{ flex: 1, marginLeft: '0.5 rem' }}>
+                <Grid container spacing={3} style={{ flex: 1 }} className='pl-2'>
                     <Grid item xs={6} sm={4} className={classes.participantWindow}>
-                        {localStream && (
-                            <ParticipantWindow 
-                                id="local"
-                                username={username}
-                                selfStream={localStream}
-                                screenStream={localScreenShareStream}
-                                isMuted={true}
-                            />
-                        )}
+                        <ParticipantWindow 
+                            id='local'
+                            username={username}
+                            selfStream={localStream}
+                            screenStream={localScreenShareStream}
+                            isMuted={true}
+                        />
                     </Grid>
                     {Object.values(consumers).map(consumer => {
                         console.log('Total consumers', consumers)
-                        
                         return (
                             <Grid item xs={6} sm={4} key={consumer} className={classes.participantWindow}>
                                 <ParticipantWindow
@@ -603,12 +659,30 @@ const VideoConference = (props) => {
                     })}
                 </Grid>
             </div>
+            
             <div className={clsx('flex justify-center items-center', classes.controlsPane)}>
                 <div className={clsx('p-2', classes.controlsContainer)}>
                     <IconButton
                         color='primary'
-                        className={classes.controlIcon}
-                        onClick={(event) => setAnchorEl(event.currentTarget)}
+                        title={cameraPaused ? 'Resume camera' : 'Pause camera'}
+                        className={cameraPaused ? classes.controlIcon : classes.controlIconStop}
+                        onClick={() => toggleSelfStream('camera')}
+                    >
+                        <VideocamIcon htmlColor='#3C3C3C' />
+                    </IconButton>
+                    <IconButton
+                        color='primary'
+                        title={micPaused ? 'Resume microphone' : 'Pause microphone'}
+                        className={clsx('mx-2', micPaused ? classes.controlIcon : classes.controlIconStop)}
+                        onClick={() => toggleSelfStream('mic')}
+                    >
+                        <MicIcon htmlColor='#3C3C3C' />
+                    </IconButton>
+                    <IconButton
+                        color='primary'
+                        title='Share or project a screen'
+                        className={(localScreenShareStream || localProjectionStream) ? classes.controlIconStop : classes.controlIcon}
+                        onClick={(event) => (localScreenShareStream || localProjectionStream) ? stopSharingScreen() : setAnchorEl(event.currentTarget)}
                     >
                         <ScreenShareIcon htmlColor='#3C3C3C' />
                     </IconButton>
@@ -644,9 +718,9 @@ const VideoConference = (props) => {
                 autoHideDuration={3000}
                 onClose={handleSnackbarClose}
             >
-                <SnackbarAlert onClose={handleSnackbarClose} severity={snackbarInfo.severity}>
+                <Alert onClose={handleSnackbarClose} severity={snackbarInfo.severity} variant='filled'>
                     { snackbarInfo.message }
-                </SnackbarAlert>
+                </Alert>
             </Snackbar>
         </div>
     )

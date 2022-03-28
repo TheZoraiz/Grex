@@ -313,8 +313,6 @@ io.on('connection', async (socket) => {
             let consumerParams = []
             let participantUsername = ''
 
-            console.log(socket.id, 'asking for', sharingMode, 'from', participantSocketId, 'and', participantProducers)
-
             if(sharingMode === 'projection')
                 participantUsername = transports[room]['projection']['username']
             else
@@ -398,7 +396,7 @@ io.on('connection', async (socket) => {
         }
     })
 
-    socket.on('consumer-resume', async({ room, participantSocketId, producerType, projection }, callback) => {
+    socket.on('consumer-resume', ({ room, participantSocketId, producerType, projection }, callback) => {
         if(projection)
             transports[room][socket.id].consumersList[producerType].resume()
         else
@@ -406,7 +404,7 @@ io.on('connection', async (socket) => {
         callback()
     })
 
-    socket.on('can-project-screen', async({ room }, callback) => {
+    socket.on('can-project-screen', ({ room }, callback) => {
         if(transports[room]['projection'])
             callback({
                 projectionExists: true,
@@ -417,6 +415,34 @@ io.on('connection', async (socket) => {
                 projectionExists: false,
                 projectingUser: null,
             })
+    })
+
+    socket.on('stopped-screenshare', ({ room }) => {
+        delete transports[room][socket.id].screenVideoProducer
+        delete transports[room][socket.id].screenAudioProducer
+
+        Object.keys(transports[room])
+            .filter(key => key !== 'projection' && key !== socket.id)
+            .forEach(socketId => {
+                delete transports[room][socketId].consumersList[socket.id].screenVideoProducer
+                delete transports[room][socketId].consumersList[socket.id].screenAudioProducer
+            })
+
+        socket.to(room).emit('participant-stopped-screenshare', { participantSocketId: socket.id })
+    })
+
+    socket.on('stopped-projecting', ({ room }) => {
+        let projectingUsername = transports[room]['projection']['username']
+        delete transports[room]['projection']
+
+        Object.keys(transports[room])
+            .filter(key => key !== 'projection' && key !== socket.id)
+            .forEach(socketId => {
+                delete transports[room][socketId].consumersList[socket.id].projectionVideoProducer
+                delete transports[room][socketId].consumersList[socket.id].projectionVideoProducer
+            })
+
+        socket.to(room).emit('projection-stopped', projectingUsername)
     })
 
     socket.on('disconnect', () => {
