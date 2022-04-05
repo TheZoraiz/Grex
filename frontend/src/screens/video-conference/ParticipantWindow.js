@@ -24,6 +24,7 @@ const ParticipantWindow = (props) => {
 
 	const partSelfVidEl = useRef(null);
 	const partScreenVidEl = useRef(null);
+	const selfMicAudioEl = useRef(null);
 
     const [selfStream, setSelfStream] = useState(null)
     const [screenStream, setScreenStream] = useState(null)
@@ -66,29 +67,44 @@ const ParticipantWindow = (props) => {
     }, [props.consumers, props.selfStream, props.screenStream])
 
     useEffect(() => {
-        if(partSelfVidEl && selfStream)
-            partSelfVidEl.current.srcObject = selfStream
+        if(selfMicAudioEl.current && selfStream && props.cameraPaused) {
+            selfMicAudioEl.current.srcObject = selfStream
+            partSelfVidEl.current = null
             
-        if(partScreenVidEl && screenStream)
+        } else if(partSelfVidEl.current && selfStream) {
+            partSelfVidEl.current.srcObject = selfStream
+            selfMicAudioEl.current = null
+        }
+            
+        if(partScreenVidEl.current && screenStream)
             partScreenVidEl.current.srcObject = screenStream
+
         
-    }, [partSelfVidEl, partScreenVidEl, selfStream, screenStream])
+    }, [partSelfVidEl, partScreenVidEl, selfMicAudioEl, selfStream, screenStream])
 
     return (
         <Grid container className={classes.participantContainer}>
-            {selfStream && (
-                <Grid item xs={screenStream ? 6 : 12} className='flex justify-center items-center' style={{ height: '80%' }}>
-                    <video
-                        id={props.id}
-                        autoPlay
-                        ref={partSelfVidEl}
-                        className={clsx('h-full', classes.videoFlip)}
-                        muted={props.isMuted}
-                    />
-                </Grid>
+            {selfStream &&  (
+                <>
+                    <audio ref={selfMicAudioEl} style={{ display: 'none' }} autoPlay />
+                    <Grid
+                        item
+                        xs={screenStream ? 6 : 12}
+                        className={'flex justify-center items-center ' + (props.cameraPaused ? 'hidden' : 'block')}
+                        style={{ height: '80%' }}
+                    >
+                        <video
+                            id={props.id}
+                            autoPlay
+                            ref={partSelfVidEl}
+                            className={clsx('h-full', classes.videoFlip)}
+                            muted={props.isMuted}
+                        />
+                    </Grid>
+                </>
             )}
             {screenStream && (
-                <Grid item xs={selfStream ? 6 : 12} className='flex justify-center items-center' style={{ height: '80%' }}>
+                <Grid item xs={props.cameraPaused ? 12 : 6} className='flex justify-center items-center' style={{ height: '80%' }}>
                     <video
                         autoPlay
                         ref={partScreenVidEl}

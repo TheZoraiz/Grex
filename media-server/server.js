@@ -445,6 +445,22 @@ io.on('connection', async (socket) => {
         socket.to(room).emit('projection-stopped', projectingUsername)
     })
 
+    socket.on('camera-toggle', ({ room, paused, resumed }) => {
+        if(paused)
+            socket.to(room).emit('participant-camera-stopped', socket.id)
+
+        if(resumed)
+            socket.to(room).emit('participant-camera-resumed', socket.id)
+    })
+
+    socket.on('mic-toggle', ({ room, paused, resumed }) => {
+        if(paused)
+            socket.to(room).emit('participant-mic-stopped', socket.id)
+
+        if(resumed)
+            socket.to(room).emit('participant-mic-resumed', socket.id)
+    })
+
     socket.on('disconnect', () => {
         console.log(socket.id, 'disconnected')
 

@@ -11,13 +11,16 @@ import {
     ListItemIcon,
     Tooltip,
     Alert,
+    Popover,
+    Slider,
 } from '@mui/material'
 import { tooltipClasses } from '@mui/material/Tooltip'
 import {
     ScreenShare as ScreenShareIcon,
     SmartDisplay as ProjectScreenIcon,
     Mic as MicIcon,
-    Videocam as VideocamIcon
+    Videocam as VideocamIcon,
+    GridView as GridViewIcon,
 } from '@mui/icons-material';
 import { makeStyles, styled } from '@mui/styles'
 import * as mediasoupClient from 'mediasoup-client'
@@ -153,7 +156,11 @@ const VideoConference = (props) => {
         severity: '',
     })
     const [snackbarOpen, setSnackbarOpen] = useState(false)
-    const [anchorEl, setAnchorEl] = React.useState(null)
+    const [anchorEl, setAnchorEl] = useState(null)
+
+    const [gridAnchorEl, setGridAnchorEl] = useState(null)
+    const [gridAnchorElOpen, setGridAnchorElOpen] = useState(false)
+    const [gridValue, setGridValue] = useState(3)
 
     // Consumers hashmap
     const [consumers, setConsumers] = useState({})
@@ -166,6 +173,13 @@ const VideoConference = (props) => {
     const [sessionLog, setSessionLog] = useState([])
 
 	const projectionVidEl = useRef(null);
+
+    const logAlert = (message, severity) => {
+        setSnackbarInfo({ message, severity })
+        // setSessionLog(currSessionLog => [...currSessionLog, message])
+        setSessionLog([...sessionLog, message])
+        setSnackbarOpen(true)
+    }
 
     const assignProducerTransportEvents = () => {
         producerTransport.on('connect', async({ dtlsParameters }, callback, errback) => {
@@ -485,9 +499,7 @@ const VideoConference = (props) => {
             })
 
             socket.on('participant-disconnected', (disconnectedSocketId) => {
-                let infoMessage = `${consumersRef.current[disconnectedSocketId].username} has left the session`
-                setSnackbarInfo({ message: infoMessage, severity: 'info' })
-                setSessionLog(currSessionLog => [...currSessionLog, infoMessage])
+                logAlert(`${consumersRef.current[disconnectedSocketId].username} has left the session`, 'info')
 
                 setConsumers(currConsumers => {
                     let newConsumers = { ...currConsumers }
@@ -496,14 +508,10 @@ const VideoConference = (props) => {
                     consumersRef.current = newConsumers
                     return newConsumers
                 })
-
-                setSnackbarOpen(true)
             })
 
             socket.on('participant-stopped-screenshare', ({ participantSocketId }) => {
-                let infoMessage = `${consumersRef.current[participantSocketId].username} stopped sharing screen`
-                setSnackbarInfo({ message: infoMessage, severity: 'info' })
-                setSessionLog(currSessionLog => [...currSessionLog, infoMessage])
+                logAlert(`${consumersRef.current[participantSocketId].username} stopped sharing screen`, 'info')
 
                 setConsumers(currConsumers => {
                     let newConsumers = { ...currConsumers }
@@ -513,8 +521,46 @@ const VideoConference = (props) => {
                     consumersRef.current = newConsumers
                     return newConsumers
                 })
+            })
 
-                setSnackbarOpen(true)
+            socket.on('participant-camera-stopped', participantSocketId => {
+                setConsumers(currConsumers => {
+                    let newConsumers = { ...currConsumers }
+                    newConsumers[participantSocketId].cameraPaused = true
+
+                    consumersRef.current = newConsumers
+                    return newConsumers
+                })
+            })
+
+            socket.on('participant-camera-resumed', participantSocketId => {
+                setConsumers(currConsumers => {
+                    let newConsumers = { ...currConsumers }
+                    newConsumers[participantSocketId].cameraPaused = false
+
+                    consumersRef.current = newConsumers
+                    return newConsumers
+                })
+            })
+
+            socket.on('participant-mic-stopped', participantSocketId => {
+                setConsumers(currConsumers => {
+                    let newConsumers = { ...currConsumers }
+                    newConsumers[participantSocketId].micPaused = true
+
+                    consumersRef.current = newConsumers
+                    return newConsumers
+                })
+            })
+
+            socket.on('participant-mic-resumed', participantSocketId => {
+                setConsumers(currConsumers => {
+                    let newConsumers = { ...currConsumers }
+                    newConsumers[participantSocketId].micPaused = false
+
+                    consumersRef.current = newConsumers
+                    return newConsumers
+                })
             })
 
             socket.on('projection-stopped', (projectingUsername) => {
@@ -524,11 +570,7 @@ const VideoConference = (props) => {
                 setProjectionVideoConsumer(null)
                 setProjectionAudioConsumer(null)
 
-                let infoMessage = `${projectingUsername} has stopped projecting the screen`
-                setSnackbarInfo({ message: infoMessage, severity: 'info' })
-                setSessionLog(currSessionLog => [...currSessionLog, infoMessage])
-
-                setSnackbarOpen(true)
+                logAlert(`${projectingUsername} has stopped projecting the screen`, 'info')
             })
 
             // new-participant is still left !!
@@ -568,12 +610,10 @@ const VideoConference = (props) => {
     const projectShareClick = () => {
         socket.emit('can-project-screen', { room: joinRoom }, ({ projectionExists, projectingUser }) => {
             if(projectionExists) {
-
-                let infoMessage = projectingUser === username ? 'You are already projecting to this session' : `${projectingUser} is already projecting to this session`
-                setSnackbarInfo({ message: infoMessage, severity: 'error' })
-                setSessionLog([...sessionLog, infoMessage])
-                
-                setSnackbarOpen(true)
+                logAlert(
+                    projectingUser === username ? 'You are already projecting to this session' : `${projectingUser} is already projecting to this session`,
+                    'error',
+                )
             } else {
                 getScreenProjection()
                 setAnchorEl(null)
@@ -605,11 +645,23 @@ const VideoConference = (props) => {
             case 'camera':
                 cameraVideoProducer.paused ? cameraVideoProducer.resume() : cameraVideoProducer.pause()
                 setCameraPaused(cameraVideoProducer.paused)
+                socket.emit('camera-toggle', {
+                    room: joinRoom,
+                    paused: cameraVideoProducer.paused,
+                    resumed: !cameraVideoProducer.paused,
+                })
+
                 break
 
             case 'mic':
                 micAudioProducer.paused ? micAudioProducer.resume() : micAudioProducer.pause()
                 setMicPaused(micAudioProducer.paused)
+                socket.emit('mic-toggle', {
+                    room: joinRoom,
+                    paused: micAudioProducer.paused,
+                    resumed: !micAudioProducer.paused,
+                })
+
                 break
         }
     }
@@ -631,19 +683,21 @@ const VideoConference = (props) => {
                     </div>
                 )}
                 <Grid container spacing={3} style={{ flex: 1 }} className='pl-2'>
-                    <Grid item xs={6} sm={4} className={classes.participantWindow}>
+                    <Grid item xs={12 / gridValue} sm={4} className={classes.participantWindow}>
                         <ParticipantWindow 
                             id='local'
                             username={username}
                             selfStream={localStream}
                             screenStream={localScreenShareStream}
+                            cameraPaused={cameraPaused}
+                            micPaused={micPaused}
                             isMuted={true}
                         />
                     </Grid>
                     {Object.values(consumers).map(consumer => {
                         console.log('Total consumers', consumers)
                         return (
-                            <Grid item xs={6} sm={4} key={consumer} className={classes.participantWindow}>
+                            <Grid item xs={12 / gridValue} sm={4} key={consumer} className={classes.participantWindow}>
                                 <ParticipantWindow
                                     username={consumer.username}
                                     consumers={{
@@ -652,6 +706,8 @@ const VideoConference = (props) => {
                                         screenVideoConsumer: consumer.screenVideoProducer,
                                         screenAudioConsumer: consumer.screenAudioProducer,
                                     }}
+                                    cameraPaused={consumer.cameraPaused}
+                                    micPaused={consumer.micPaused}
                                     isMuted={false}
                                 />
                             </Grid>
@@ -665,7 +721,7 @@ const VideoConference = (props) => {
                     <IconButton
                         color='primary'
                         title={cameraPaused ? 'Resume camera' : 'Pause camera'}
-                        className={cameraPaused ? classes.controlIcon : classes.controlIconStop}
+                        className={clsx('mr-1', cameraPaused ? classes.controlIcon : classes.controlIconStop)}
                         onClick={() => toggleSelfStream('camera')}
                     >
                         <VideocamIcon htmlColor='#3C3C3C' />
@@ -673,7 +729,7 @@ const VideoConference = (props) => {
                     <IconButton
                         color='primary'
                         title={micPaused ? 'Resume microphone' : 'Pause microphone'}
-                        className={clsx('mx-2', micPaused ? classes.controlIcon : classes.controlIconStop)}
+                        className={clsx('mx-1', micPaused ? classes.controlIcon : classes.controlIconStop)}
                         onClick={() => toggleSelfStream('mic')}
                     >
                         <MicIcon htmlColor='#3C3C3C' />
@@ -681,7 +737,7 @@ const VideoConference = (props) => {
                     <IconButton
                         color='primary'
                         title='Share or project a screen'
-                        className={(localScreenShareStream || localProjectionStream) ? classes.controlIconStop : classes.controlIcon}
+                        className={clsx('mx-1', (localScreenShareStream || localProjectionStream) ? classes.controlIconStop : classes.controlIcon)}
                         onClick={(event) => (localScreenShareStream || localProjectionStream) ? stopSharingScreen() : setAnchorEl(event.currentTarget)}
                     >
                         <ScreenShareIcon htmlColor='#3C3C3C' />
@@ -708,6 +764,47 @@ const VideoConference = (props) => {
                             </MenuItem>
                         </CustomTooltip>
                     </Menu>
+                    <IconButton
+                        color='primary'
+                        title='Choose grid items numbering'
+                        className={clsx('ml-1', classes.controlIcon)}
+                        onClick={(event) => {
+                            setGridAnchorEl(event.currentTarget)
+                            setGridAnchorElOpen(true)
+                        }}
+                    >
+                        <GridViewIcon htmlColor='#3C3C3C'/>
+                    </IconButton>
+                    <Popover
+                        open={gridAnchorElOpen}
+                        onClose={() => {
+                            setGridAnchorEl(null)
+                            setGridAnchorElOpen(false)
+                        }}
+                        anchorEl={gridAnchorEl}
+                        anchorOrigin={{
+                            vertical: 'top',
+                            horizontal: 'left',
+                        }}
+                        transformOrigin={{
+                            vertical: 'bottom',
+                            horizontal: 'left',
+                        }}
+                    >
+                        <div className='p-2' style={{ width: 200 }}>
+                            <Slider
+                                aria-label="grid value"
+                                defaultValue={gridValue}
+                                getAriaValueText={(value) => value}
+                                valueLabelDisplay="auto"
+                                step={1}
+                                marks
+                                min={2}
+                                max={10}
+                                onChange={(event, val) => setGridValue(val)}
+                            />
+                        </div>
+                    </Popover>
                 </div>
             </div>
             
