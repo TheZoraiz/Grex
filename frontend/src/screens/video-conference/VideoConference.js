@@ -160,7 +160,7 @@ const VideoConference = (props) => {
 
     const [gridAnchorEl, setGridAnchorEl] = useState(null)
     const [gridAnchorElOpen, setGridAnchorElOpen] = useState(false)
-    const [gridValue, setGridValue] = useState(3)
+    const [gridValue, setGridValue] = useState(8)
 
     // Consumers hashmap
     const [consumers, setConsumers] = useState({})
@@ -328,6 +328,19 @@ const VideoConference = (props) => {
                     if(params && params.error) {
                         console.log(params.error)
                         return
+                    }
+
+                    if(params.hasOwnProperty('cameraPaused')) {
+                        Object.assign(tempConsumers[params.participantSocketId], {
+                            cameraPaused: params.cameraPaused,
+                        })
+                        continue
+                    }
+                    if(params.hasOwnProperty('micPaused')) {
+                        Object.assign(tempConsumers[params.participantSocketId], {
+                            micPaused: params.micPaused,
+                        })
+                        continue
                     }
                     
                     let tempConsumer = await consumerTransport.consume({
@@ -666,6 +679,11 @@ const VideoConference = (props) => {
         }
     }
 
+    useEffect(() => {
+        console.log('gridValue', gridValue)
+        console.log('12 - gridValue', 12 - gridValue)
+    }, [gridValue])
+
     return (
         <div className='w-full flex flex-col justify-center'>
             <div className={clsx('flex mx-5 my-3', classes.participantsContainer)}>
@@ -683,7 +701,7 @@ const VideoConference = (props) => {
                     </div>
                 )}
                 <Grid container spacing={3} style={{ flex: 1 }} className='pl-2'>
-                    <Grid item xs={12 / gridValue} sm={4} className={classes.participantWindow}>
+                    <Grid item xs={12 - gridValue} className={classes.participantWindow}>
                         <ParticipantWindow 
                             id='local'
                             username={username}
@@ -697,7 +715,7 @@ const VideoConference = (props) => {
                     {Object.values(consumers).map(consumer => {
                         console.log('Total consumers', consumers)
                         return (
-                            <Grid item xs={12 / gridValue} sm={4} key={consumer} className={classes.participantWindow}>
+                            <Grid item xs={12 - gridValue} key={consumer} className={classes.participantWindow}>
                                 <ParticipantWindow
                                     username={consumer.username}
                                     consumers={{
@@ -795,12 +813,10 @@ const VideoConference = (props) => {
                             <Slider
                                 aria-label="grid value"
                                 defaultValue={gridValue}
-                                getAriaValueText={(value) => value}
-                                valueLabelDisplay="auto"
                                 step={1}
                                 marks
-                                min={2}
-                                max={10}
+                                min={0}
+                                max={11}
                                 onChange={(event, val) => setGridValue(val)}
                             />
                         </div>

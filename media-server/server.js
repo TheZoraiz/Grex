@@ -273,10 +273,9 @@ io.on('connection', async (socket) => {
 
                     // Because screens may or may not have audio
                     if(transports[room][participantSocketId]['screenAudioProducer'])
-                        participantProducers = {
-                            ...participantProducers,
+                        Object.assign(participantProducers, {
                             screenAudioProducer: transports[room][participantSocketId]['screenAudioProducer'],
-                        }
+                        })
                     break
 
                 case 'projection':
@@ -284,10 +283,9 @@ io.on('connection', async (socket) => {
                         projectionVideoProducer: transports[room]['projection']['projectionVideoProducer'],
                     }
                     if(transports[room]['projection']['projectionAudioProducer'])
-                        participantProducers = {
-                            ...participantProducers,
+                        Object.assign(participantProducers, {
                             projectionAudioProducer: transports[room]['projection']['projectionAudioProducer'],
-                        }
+                        })
                     break
                 
                 case 'all':
@@ -296,17 +294,27 @@ io.on('connection', async (socket) => {
                         micAudioProducer: transports[room][participantSocketId]['micAudioProducer'],
                     }
 
+                    // Check if participant has paused mic or camera. We always initialize camera and mic
+                    // consumers on server and client-side so we use booleans to decide whether to show them
+                    // or not
+                    if(transports[room][participantSocketId].hasOwnProperty('cameraPaused'))
+                        Object.assign(participantProducers, {
+                            cameraPaused: transports[room][participantSocketId]['cameraPaused'],
+                        })
+                    if(transports[room][participantSocketId].hasOwnProperty('micPaused'))
+                        Object.assign(participantProducers, {
+                            micPaused: transports[room][participantSocketId]['micPaused'],
+                        })
+
                     // Because participant may or may not be sharing a screen
                     if(transports[room][participantSocketId]['screenVideoProducer'])
-                        participantProducers = {
-                            ...participantProducers,
+                        Object.assign(participantProducers, {
                             screenVideoProducer: transports[room][participantSocketId]['screenVideoProducer'],
-                        }
+                        })
                     if(transports[room][participantSocketId]['screenAudioProducer'])
-                        participantProducers = {
-                            ...participantProducers,
+                        Object.assign(participantProducers, {
                             screenAudioProducer: transports[room][participantSocketId]['screenAudioProducer'],
-                        }
+                        })
                     break
             }
 
@@ -322,6 +330,16 @@ io.on('connection', async (socket) => {
 
             for(let i = 0; i < participantProducerTypes.length; i++) {
                 let producerType = participantProducerTypes[i]
+
+                if(producerType === 'cameraPaused' || producerType === 'micPaused') {
+                    consumerParams.push({
+                        [producerType]: participantProducers[producerType],
+                        participantSocketId,
+                        participantUsername,
+                    })
+                    continue
+                }
+
                 let tempProducer = participantProducers[producerType]
 
                 if(routers[room].canConsume({
@@ -439,26 +457,34 @@ io.on('connection', async (socket) => {
             .filter(key => key !== 'projection' && key !== socket.id)
             .forEach(socketId => {
                 delete transports[room][socketId].consumersList[socket.id].projectionVideoProducer
-                delete transports[room][socketId].consumersList[socket.id].projectionVideoProducer
+                delete transports[room][socketId].consumersList[socket.id].projectionAudioProducer
             })
 
         socket.to(room).emit('projection-stopped', projectingUsername)
     })
 
     socket.on('camera-toggle', ({ room, paused, resumed }) => {
-        if(paused)
+        if(paused) {
             socket.to(room).emit('participant-camera-stopped', socket.id)
+            transports[room][socket.id]['cameraPaused'] = true
+        }
 
-        if(resumed)
+        if(resumed) {
             socket.to(room).emit('participant-camera-resumed', socket.id)
+            transports[room][socket.id]['cameraPaused'] = false
+        }
     })
 
     socket.on('mic-toggle', ({ room, paused, resumed }) => {
-        if(paused)
+        if(paused) {
             socket.to(room).emit('participant-mic-stopped', socket.id)
+            transports[room][socket.id]['micPaused'] = true
+        }
 
-        if(resumed)
+        if(resumed) {
             socket.to(room).emit('participant-mic-resumed', socket.id)
+            transports[room][socket.id]['micPaused'] = false
+        }
     })
 
     socket.on('disconnect', () => {
