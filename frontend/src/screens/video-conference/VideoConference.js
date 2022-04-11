@@ -93,6 +93,7 @@ let tempConsumers = {}
 
 const useStyles = makeStyles(theme => ({
     participantsContainer: {
+        overflowY: 'scroll',
         height: '85vh',
     },
     controlsPane: {
@@ -110,7 +111,7 @@ const useStyles = makeStyles(theme => ({
         backgroundColor: `#E94335 !important`,
     },
     participantWindow: {
-        maxHeight: 250,
+        // maxHeight: 250,
     },
     projectionVideoStyle: {
         borderRadius: 10,
@@ -160,7 +161,8 @@ const VideoConference = (props) => {
 
     const [gridAnchorEl, setGridAnchorEl] = useState(null)
     const [gridAnchorElOpen, setGridAnchorElOpen] = useState(false)
-    const [gridValue, setGridValue] = useState(8)
+    const [gridHorizontalValue, setGridHorizontalValue] = useState(0)
+    const [gridVerticalValue, setGridVerticalValue] = useState(100)
 
     // Consumers hashmap
     const [consumers, setConsumers] = useState({})
@@ -448,6 +450,32 @@ const VideoConference = (props) => {
         }
 
     }, [projectionVidEl, localProjectionStream, projectionVideoConsumer, projectionAudioConsumer])
+
+    useEffect(() => {
+        let totalParticipants = 1 + Object.keys(consumers).length
+
+        switch(totalParticipants) {
+            case 1:
+                setGridHorizontalValue(0)
+                setGridVerticalValue(100)
+                break
+            
+            case 2:
+                setGridHorizontalValue(6)
+                setGridVerticalValue(100)
+                break
+            
+            case 3:
+                setGridHorizontalValue(6)
+                setGridVerticalValue(50)
+                break
+        }
+
+        if(totalParticipants >= 4) {
+            setGridHorizontalValue(8)
+            setGridVerticalValue(33)
+        }
+    }, [consumers])
     
     useEffect(() => {
         setSocket(io(process.env.REACT_APP_MEDIA_SERVER_SOCKET_URL))
@@ -679,11 +707,6 @@ const VideoConference = (props) => {
         }
     }
 
-    useEffect(() => {
-        console.log('gridValue', gridValue)
-        console.log('12 - gridValue', 12 - gridValue)
-    }, [gridValue])
-
     return (
         <div className='w-full flex flex-col justify-center'>
             <div className={clsx('flex mx-5 my-3', classes.participantsContainer)}>
@@ -701,7 +724,7 @@ const VideoConference = (props) => {
                     </div>
                 )}
                 <Grid container spacing={3} style={{ flex: 1 }} className='pl-2'>
-                    <Grid item xs={12 - gridValue} className={classes.participantWindow}>
+                    <Grid item xs={12 - gridHorizontalValue} className={classes.participantWindow} style={{ height: `${gridVerticalValue}%` }}>
                         <ParticipantWindow 
                             id='local'
                             username={username}
@@ -715,7 +738,7 @@ const VideoConference = (props) => {
                     {Object.values(consumers).map(consumer => {
                         console.log('Total consumers', consumers)
                         return (
-                            <Grid item xs={12 - gridValue} key={consumer} className={classes.participantWindow}>
+                            <Grid item xs={12 - gridHorizontalValue} key={consumer} className={classes.participantWindow} style={{ height: `${gridVerticalValue}%` }}>
                                 <ParticipantWindow
                                     username={consumer.username}
                                     consumers={{
@@ -812,12 +835,16 @@ const VideoConference = (props) => {
                         <div className='p-2' style={{ width: 200 }}>
                             <Slider
                                 aria-label="grid value"
-                                defaultValue={gridValue}
+                                defaultValue={gridHorizontalValue}
                                 step={1}
                                 marks
                                 min={0}
                                 max={11}
-                                onChange={(event, val) => setGridValue(val)}
+                                onChange={(event, val) => {
+                                    setGridHorizontalValue(val)
+                                    let vertVal = 100 - ((val/11) * 100)
+                                    setGridVerticalValue(vertVal)
+                                }}
                             />
                         </div>
                     </Popover>
