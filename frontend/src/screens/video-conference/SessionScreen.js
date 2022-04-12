@@ -24,11 +24,12 @@ import {
 } from '@mui/icons-material';
 import { makeStyles, styled } from '@mui/styles'
 import * as mediasoupClient from 'mediasoup-client'
-import { useSelector } from 'react-redux'
+import { useSelector, useDispatch } from 'react-redux'
 import { io } from 'socket.io-client'
 import clsx from 'clsx'
 
 import ParticipantWindow from './ParticipantWindow'
+import { setSocket } from './sessionSlice'
 
 const videoConstraints = {
     video: {
@@ -130,10 +131,13 @@ const CustomTooltip = styled(({ className, ...props }) => (
 
 const SessionScreen = (props) => {
     const classes = useStyles()
+    const dispatch = useDispatch()
 
     const { username, joinRoom } = props;
 
-    const [socket, setSocket] = useState(null)
+    const { socket } = useSelector(state => state.session)
+    // const [socket, setSocket] = useState(null)
+
     const [localStream, setLocalStream] = useState(null);
     const [localScreenShareStream, setLocalScreenShareStream] = useState(null);
     const [localProjectionStream, setLocalProjectionStream] = useState(null);
@@ -479,7 +483,7 @@ const SessionScreen = (props) => {
     }, [consumers])
     
     useEffect(() => {
-        setSocket(io(process.env.REACT_APP_MEDIA_SERVER_SOCKET_URL))
+        dispatch(setSocket(io(process.env.REACT_APP_MEDIA_SERVER_SOCKET_URL)))
     }, [])
 
     useEffect(async() => {
@@ -634,6 +638,9 @@ const SessionScreen = (props) => {
             socket.emit('create-or-join', joinRoom)
         }
 
+        return () => {
+            dispatch(setSocket(null))
+        }
     }, [socket])
 
     // -----------------------
