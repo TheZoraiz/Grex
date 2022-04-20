@@ -94,8 +94,11 @@ io.on('connection', async (socket) => {
     })
 
     socket.on('web-rtc-transport', async ({ room, username }, callback) => {
-        transports[room] = {
-            ...transports[room],
+        if(!transports[room])
+            transports[room] = {}
+
+        transports[room]['participants'] = {
+            ...transports[room]['participants'],
             [socket.id]: {
                 username,
                 producerTransport: await createWebRtcTransport(room, socket.id, callback),
@@ -104,31 +107,32 @@ io.on('connection', async (socket) => {
         }
 
         let serverConsumerTransportParams = {
-            id:             transports[room][socket.id].consumerTransport.id,
-            iceParameters:  transports[room][socket.id].consumerTransport.iceParameters,
-            iceCandidates:  transports[room][socket.id].consumerTransport.iceCandidates,
-            dtlsParameters: transports[room][socket.id].consumerTransport.dtlsParameters,
+            id:             transports[room]['participants'][socket.id].consumerTransport.id,
+            iceParameters:  transports[room]['participants'][socket.id].consumerTransport.iceParameters,
+            iceCandidates:  transports[room]['participants'][socket.id].consumerTransport.iceCandidates,
+            dtlsParameters: transports[room]['participants'][socket.id].consumerTransport.dtlsParameters,
         }
 
         io.to(socket.id).emit('server-consumer-transport-created', { serverConsumerTransportParams })
 
         console.log('transports', transports)
+        console.log(`transports[${room}]`, transports[room])
     })
 
     socket.on('transport-connect', async ({ dtlsParameters, consumerTransportId, isConsumer, room }) => {
         console.log('dtlsParameters recieved from socket', socket.id)
         
         if(isConsumer) {
-            await transports[room][socket.id].consumerTransport.connect({ dtlsParameters })
+            await transports[room]['participants'][socket.id].consumerTransport.connect({ dtlsParameters })
             // await transports[room][socket.id]['consumerTransport'].connect({ dtlsParameters })
 
         } else {
-            await transports[room][socket.id].producerTransport.connect({ dtlsParameters })
+            await transports[room]['participants'][socket.id].producerTransport.connect({ dtlsParameters })
         }
     })
 
     socket.on('transport-produce', async ({ room, kind, rtpParameters, appData, sharingMode }, callback) => {
-        let socketProducerTransport = transports[room][socket.id]['producerTransport']
+        let socketProducerTransport = transports[room]['participants'][socket.id]['producerTransport']
 
         let producerName = ''
 
@@ -162,7 +166,7 @@ io.on('connection', async (socket) => {
             if(!transports[room]['projection'])
                 transports[room]['projection'] = {}
 
-            transports[room]['projection']['username'] = transports[room][socket.id]['username']
+            transports[room]['projection']['username'] = transports[room]['participants'][socket.id]['username']
             transports[room]['projection']['userSocketId'] = socket.id
             transports[room]['projection'][producerName] = await socketProducerTransport.produce({
                 kind, rtpParameters
@@ -170,10 +174,10 @@ io.on('connection', async (socket) => {
             tempProducer = transports[room]['projection'][producerName]
 
         } else {
-            transports[room][socket.id][producerName] = await socketProducerTransport.produce({
+            transports[room]['participants'][socket.id][producerName] = await socketProducerTransport.produce({
                 kind, rtpParameters
             })
-            tempProducer = transports[room][socket.id][producerName]
+            tempProducer = transports[room]['participants'][socket.id][producerName]
         }
 
         tempProducer.on('transportclose', () => {
@@ -185,12 +189,20 @@ io.on('connection', async (socket) => {
         // AFTER new participant's producer has been made on server and locally
         if(
             sharingMode === 'self'
-            && transports[room][socket.id]['cameraVideoProducer']
-            && transports[room][socket.id]['micAudioProducer']
+            && transports[room]['participants'][socket.id]['cameraVideoProducer']
+            && transports[room]['participants'][socket.id]['micAudioProducer']
         ) {
             let otherParticipants = []
     
-            otherParticipants = Object.keys(transports[room]).filter(id => id !== socket.id && id !== 'projection');
+            otherParticipants = Object.keys(transports[room]['participants']).filter(id => id !== socket.id);
+
+            // Tell newly joined participant about breakout rooms if they exist
+            if(transports[room]['breakoutRooms']) {
+                // transports[room]['breakoutRooms'] = transports[room]['breakoutRooms'].map(breakoutRoom => {
+                //     breakoutRoom.participants = Object.keys(transports[breakoutRoom.name]['participants']).length
+                // })
+                io.to(socket.id).emit('existing-breakout-rooms', transports[room]['breakoutRooms'])
+            }
     
             if(otherParticipants.length > 0) {
                 // Send list of participants to newly joined participant
@@ -198,6 +210,7 @@ io.on('connection', async (socket) => {
                     otherParticipants,
                     streamType: 'all',
                 })
+
 
                 // Tell new participant that a screen is being projected
                 if(transports[room]['projection']) {
@@ -218,11 +231,11 @@ io.on('connection', async (socket) => {
         }
 
         if(
-            (sharingMode === 'screen' && transports[room][socket.id]['screenVideoProducer'])
+            (sharingMode === 'screen' && transports[room]['participants'][socket.id]['screenVideoProducer'])
             || (sharingMode === 'projection' && transports[room]['projection']['projectionVideoProducer'])
             // && transports[room][socket.id]['screenAudioProducer']
         ) {
-            otherParticipants = Object.keys(transports[room]).filter(id => id !== socket.id);
+            otherParticipants = Object.keys(transports[room]['participants']).filter(id => id !== socket.id);
     
             if(otherParticipants.length > 0) {
                 // Tell others participant that participant is sharing screen
@@ -239,7 +252,7 @@ io.on('connection', async (socket) => {
             sharingMode === 'projection'
             && transports[room]['projection']['projectionVideoProducer']
         ) {
-            otherParticipants = Object.keys(transports[room]).filter(id => id !== socket.id);
+            otherParticipants = Object.keys(transports[room]['participants']).filter(id => id !== socket.id);
     
             if(otherParticipants.length > 0) {
                 // Tell others participant that participant is projecting screen
@@ -250,6 +263,7 @@ io.on('connection', async (socket) => {
         }
 
         console.log('transports', transports)
+        console.log(`transports[${room}]`, transports[room])
 
         callback({ id: tempProducer.id })
     })
@@ -261,20 +275,20 @@ io.on('connection', async (socket) => {
             switch(sharingMode) {
                 case 'self':
                     participantProducers = {
-                        cameraVideoProducer: transports[room][participantSocketId]['cameraVideoProducer'],
-                        micAudioProducer: transports[room][participantSocketId]['micAudioProducer'],
+                        cameraVideoProducer: transports[room]['participants'][participantSocketId]['cameraVideoProducer'],
+                        micAudioProducer: transports[room]['participants'][participantSocketId]['micAudioProducer'],
                     }
                     break
 
                 case 'screen':
                     participantProducers = {
-                        screenVideoProducer: transports[room][participantSocketId]['screenVideoProducer'],
+                        screenVideoProducer: transports[room]['participants'][participantSocketId]['screenVideoProducer'],
                     }
 
                     // Because screens may or may not have audio
-                    if(transports[room][participantSocketId]['screenAudioProducer'])
+                    if(transports[room]['participants'][participantSocketId]['screenAudioProducer'])
                         Object.assign(participantProducers, {
-                            screenAudioProducer: transports[room][participantSocketId]['screenAudioProducer'],
+                            screenAudioProducer: transports[room]['participants'][participantSocketId]['screenAudioProducer'],
                         })
                     break
 
@@ -290,30 +304,30 @@ io.on('connection', async (socket) => {
                 
                 case 'all':
                     participantProducers = {
-                        cameraVideoProducer: transports[room][participantSocketId]['cameraVideoProducer'],
-                        micAudioProducer: transports[room][participantSocketId]['micAudioProducer'],
+                        cameraVideoProducer: transports[room]['participants'][participantSocketId]['cameraVideoProducer'],
+                        micAudioProducer: transports[room]['participants'][participantSocketId]['micAudioProducer'],
                     }
 
                     // Check if participant has paused mic or camera. We always initialize camera and mic
                     // consumers on server and client-side so we use booleans to decide whether to show them
                     // or not
-                    if(transports[room][participantSocketId].hasOwnProperty('cameraPaused'))
+                    if(transports[room]['participants'][participantSocketId].hasOwnProperty('cameraPaused'))
                         Object.assign(participantProducers, {
-                            cameraPaused: transports[room][participantSocketId]['cameraPaused'],
+                            cameraPaused: transports[room]['participants'][participantSocketId]['cameraPaused'],
                         })
-                    if(transports[room][participantSocketId].hasOwnProperty('micPaused'))
+                    if(transports[room]['participants'][participantSocketId].hasOwnProperty('micPaused'))
                         Object.assign(participantProducers, {
-                            micPaused: transports[room][participantSocketId]['micPaused'],
+                            micPaused: transports[room]['participants'][participantSocketId]['micPaused'],
                         })
 
                     // Because participant may or may not be sharing a screen
-                    if(transports[room][participantSocketId]['screenVideoProducer'])
+                    if(transports[room]['participants'][participantSocketId]['screenVideoProducer'])
                         Object.assign(participantProducers, {
-                            screenVideoProducer: transports[room][participantSocketId]['screenVideoProducer'],
+                            screenVideoProducer: transports[room]['participants'][participantSocketId]['screenVideoProducer'],
                         })
-                    if(transports[room][participantSocketId]['screenAudioProducer'])
+                    if(transports[room]['participants'][participantSocketId]['screenAudioProducer'])
                         Object.assign(participantProducers, {
-                            screenAudioProducer: transports[room][participantSocketId]['screenAudioProducer'],
+                            screenAudioProducer: transports[room]['participants'][participantSocketId]['screenAudioProducer'],
                         })
                     break
             }
@@ -324,7 +338,7 @@ io.on('connection', async (socket) => {
             if(sharingMode === 'projection')
                 participantUsername = transports[room]['projection']['username']
             else
-                participantUsername = transports[room][participantSocketId]['username']
+                participantUsername = transports[room]['participants'][participantSocketId]['username']
 
             let participantProducerTypes = Object.keys(participantProducers)
 
@@ -347,14 +361,14 @@ io.on('connection', async (socket) => {
                     rtpCapabilities
                 })) {
     
-                    if( !transports[room][socket.id].consumersList ) {
-                        transports[room][socket.id] = {
-                            ...transports[room][socket.id],
+                    if( !transports[room]['participants'][socket.id].consumersList ) {
+                        transports[room]['participants'][socket.id] = {
+                            ...transports[room]['participants'][socket.id],
                             consumersList: {}
                         }
                     }
     
-                    let tempConsumerTransport = transports[room][socket.id].consumerTransport
+                    let tempConsumerTransport = transports[room]['participants'][socket.id].consumerTransport
     
                     let tempConsumer = await tempConsumerTransport.consume({
                         producerId: tempProducer.id,
@@ -364,18 +378,19 @@ io.on('connection', async (socket) => {
     
 
                     if(sharingMode === 'projection') {
-                        transports[room][socket.id].consumersList = {
-                            ...transports[room][socket.id].consumersList,
+                        transports[room]['participants'][socket.id].consumersList = {
+                            ...transports[room]['participants'][socket.id].consumersList,
                             [producerType]: tempConsumer,
                         }
                     } else {
-                        transports[room][socket.id].consumersList[participantSocketId] = {
-                            ...transports[room][socket.id].consumersList[participantSocketId],
+                        transports[room]['participants'][socket.id].consumersList[participantSocketId] = {
+                            ...transports[room]['participants'][socket.id].consumersList[participantSocketId],
                             [producerType]: tempConsumer,
                         }
                     }
             
                     console.log('transports', transports)
+                    console.log(`transports[${room}]`, transports[room])
     
                     tempConsumer.on('transportclose', () => {
                         console.log('Transport for', socket.id, 'has closed')
@@ -416,9 +431,9 @@ io.on('connection', async (socket) => {
 
     socket.on('consumer-resume', ({ room, participantSocketId, producerType, projection }, callback) => {
         if(projection)
-            transports[room][socket.id].consumersList[producerType].resume()
+            transports[room]['participants'][socket.id].consumersList[producerType].resume()
         else
-            transports[room][socket.id].consumersList[participantSocketId][producerType].resume()
+            transports[room]['participants'][socket.id].consumersList[participantSocketId][producerType].resume()
         callback()
     })
 
@@ -436,14 +451,14 @@ io.on('connection', async (socket) => {
     })
 
     socket.on('stopped-screenshare', ({ room }) => {
-        delete transports[room][socket.id].screenVideoProducer
-        delete transports[room][socket.id].screenAudioProducer
+        delete transports[room]['participants'][socket.id].screenVideoProducer
+        delete transports[room]['participants'][socket.id].screenAudioProducer
 
-        Object.keys(transports[room])
-            .filter(key => key !== 'projection' && key !== socket.id)
+        Object.keys(transports[room]['participants'])
+            .filter(key => key !== socket.id)
             .forEach(socketId => {
-                delete transports[room][socketId].consumersList[socket.id].screenVideoProducer
-                delete transports[room][socketId].consumersList[socket.id].screenAudioProducer
+                delete transports[room]['participants'][socketId].consumersList[socket.id].screenVideoProducer
+                delete transports[room]['participants'][socketId].consumersList[socket.id].screenAudioProducer
             })
 
         socket.to(room).emit('participant-stopped-screenshare', { participantSocketId: socket.id })
@@ -453,11 +468,11 @@ io.on('connection', async (socket) => {
         let projectingUsername = transports[room]['projection']['username']
         delete transports[room]['projection']
 
-        Object.keys(transports[room])
-            .filter(key => key !== 'projection' && key !== socket.id)
+        Object.keys(transports[room]['participants'])
+            .filter(key => key !== socket.id)
             .forEach(socketId => {
-                delete transports[room][socketId].consumersList[socket.id].projectionVideoProducer
-                delete transports[room][socketId].consumersList[socket.id].projectionAudioProducer
+                delete transports[room]['participants'][socketId].consumersList[socket.id].projectionVideoProducer
+                delete transports[room]['participants'][socketId].consumersList[socket.id].projectionAudioProducer
             })
 
         socket.to(room).emit('projection-stopped', projectingUsername)
@@ -466,40 +481,55 @@ io.on('connection', async (socket) => {
     socket.on('camera-toggle', ({ room, paused, resumed }) => {
         if(paused) {
             socket.to(room).emit('participant-camera-stopped', socket.id)
-            transports[room][socket.id]['cameraPaused'] = true
+            transports[room]['participants'][socket.id]['cameraPaused'] = true
         }
 
         if(resumed) {
             socket.to(room).emit('participant-camera-resumed', socket.id)
-            transports[room][socket.id]['cameraPaused'] = false
+            transports[room]['participants'][socket.id]['cameraPaused'] = false
         }
     })
 
     socket.on('mic-toggle', ({ room, paused, resumed }) => {
         if(paused) {
             socket.to(room).emit('participant-mic-stopped', socket.id)
-            transports[room][socket.id]['micPaused'] = true
+            transports[room]['participants'][socket.id]['micPaused'] = true
         }
 
         if(resumed) {
             socket.to(room).emit('participant-mic-resumed', socket.id)
-            transports[room][socket.id]['micPaused'] = false
+            transports[room]['participants'][socket.id]['micPaused'] = false
         }
+    })
+
+    // Written so that main room doesn't have a uuid. Need to change when video conferencing
+    // will be integrated into the system
+    socket.on('breakout-room-created', roomTabs => {
+        roomTabs.forEach(roomTab => {
+            // IMPORTANT: Needs to be changed to roomTab.id with system development later
+            if(roomTab.name === 'Main Room') {
+                transports[roomTab.name]['breakoutRooms'] = roomTabs
+                socket.to(roomTab.name).emit('new-breakout-room', roomTabs)
+                return
+            }
+            
+            socket.to(roomTab.name).emit('new-breakout-room', roomTabs)
+        })
     })
 
     socket.on('disconnect', () => {
         console.log(socket.id, 'disconnected')
 
         Object.keys(transports).forEach(room => {
-            delete transports[room][socket.id]
+            delete transports[room]['participants'][socket.id]
 
             if(transports[room]['projection'] && transports[room]['projection']['userSocketId'] === socket.id) {
                 let projectingUsername = transports[room]['projection']['username']
                 delete transports[room]['projection']
 
-                Object.keys(transports[room]).forEach(socketId => {
-                    delete transports[room][socketId].consumersList.projectionVideoProducer
-                    delete transports[room][socketId].consumersList.projectionAudioProducer
+                Object.keys(transports[room]['participants']).forEach(socketId => {
+                    delete transports[room]['participants'][socketId].consumersList.projectionVideoProducer
+                    delete transports[room]['participants'][socketId].consumersList.projectionAudioProducer
                 })
 
                 socket.to(room).emit('projection-stopped', projectingUsername)

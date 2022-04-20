@@ -609,6 +609,14 @@ const SessionScreen = (props) => {
                 })
             })
 
+            socket.on('new-breakout-room', roomTabs => {
+                props.setRoomTabs(roomTabs)
+            })
+            
+            socket.on('existing-breakout-rooms', existingBreakoutRooms => {
+                props.setRoomTabs(existingBreakoutRooms)
+            })
+
             socket.on('projection-stopped', (projectingUsername) => {
                 setLocalProjectionStream(null)
                 setProjectionVideoProducer(null)
@@ -639,7 +647,9 @@ const SessionScreen = (props) => {
         }
 
         return () => {
-            dispatch(setSocket(null))
+            device = null
+            producerTransport = null
+            consumerTransport = null
         }
     }, [socket])
 

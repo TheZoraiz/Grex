@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import PropTypes from 'prop-types';
 import {
     Tab,
@@ -17,7 +17,9 @@ import {
 import {
     AddCircle as AddCircleIcon
 } from '@mui/icons-material';
-import { useSelector } from 'react-redux'
+import { useSelector, useDispatch } from 'react-redux'
+import { v4 as uuidv4 } from 'uuid'
+import { setSocket } from './sessionSlice'
 
 import SessionScreen from './SessionScreen'
 
@@ -56,30 +58,43 @@ function a11yProps(index) {
 
 
 function VideoConference() {
+    const dispatch = useDispatch()
+    const { socket } = useSelector(state => state.session)
     const { username, joinRoom } = useSelector(state => state.user)
     const [tabValue, setTabValue] = useState(0)
 
     const [breakoutRoomNameDialogOpen, setBreakoutRoomNameDialogOpen] = useState(false)
     const [tempRoomName, setTempRoomName] = useState('')
     const [roomTabs, setRoomTabs] = useState([{
-        label: 'Main Room',
-        name: joinRoom,
+        id: uuidv4(),
+        name: 'Main Room',
         participants: 0,
     }])
 
     const handleChange = (event, newValue) => {
+        socket.disconnect()
         setTabValue(newValue);
     }
 
     const handleBreakoutRoomNameSubmittion = () => {
-        setRoomTabs([
+        for(let i = 0; i < roomTabs.length; i++) {
+            if(tempRoomName === roomTabs[i].name) {
+                alert(`${tempRoomName} already exists`)
+                return
+            }
+        }
+
+        let newTabs = [
             ...roomTabs,
             {
-                label: tempRoomName,
+                id: uuidv4(),
                 name: tempRoomName,
                 participants: 0,
             }
-        ])
+        ]
+        setRoomTabs(newTabs)
+
+        socket.emit('breakout-room-created', newTabs)
         setBreakoutRoomNameDialogOpen(false)
     }
 
@@ -95,7 +110,7 @@ function VideoConference() {
                     <Tab
                         label={
                             <Badge color="secondary" badgeContent={roomTab.participants} max={99}>
-                                {roomTab.label}
+                                {roomTab.name}
                             </Badge>
                         }
                         {...a11yProps(index)}
@@ -114,6 +129,7 @@ function VideoConference() {
             {roomTabs.map((roomTab, index) => (
                 <TabPanel value={tabValue} index={index}>
                     <SessionScreen
+                        // IMPORTANT: Needs to be changed to roomTab.id with system development later
                         joinRoom={roomTab.name}
                         username={username}
                         setRoomTabs={setRoomTabs}
