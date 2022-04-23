@@ -643,6 +643,10 @@ const SessionScreen = (props) => {
                 track: micAudioTrack,
                 ...globalParams,
             }
+
+            // In case participant changed to breakout room and sharingMode is different
+            sharingMode = 'self'
+
             socket.emit('create-or-join', joinRoom)
         }
 

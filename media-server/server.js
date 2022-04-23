@@ -94,8 +94,9 @@ io.on('connection', async (socket) => {
     })
 
     socket.on('web-rtc-transport', async ({ room, username }, callback) => {
+
         if(!transports[room])
-            transports[room] = {}
+            transports[room] = { participants: {} }
 
         transports[room]['participants'] = {
             ...transports[room]['participants'],
@@ -196,12 +197,22 @@ io.on('connection', async (socket) => {
     
             otherParticipants = Object.keys(transports[room]['participants']).filter(id => id !== socket.id);
 
+            let breakoutRoomsArray = getBreakoutRoomsArray(room)
+
             // Tell newly joined participant about breakout rooms if they exist
-            if(transports[room]['breakoutRooms']) {
-                // transports[room]['breakoutRooms'] = transports[room]['breakoutRooms'].map(breakoutRoom => {
-                //     breakoutRoom.participants = Object.keys(transports[breakoutRoom.name]['participants']).length
-                // })
-                io.to(socket.id).emit('existing-breakout-rooms', transports[room]['breakoutRooms'])
+            if(breakoutRoomsArray.length > 0) {
+                // Update participant numbers
+                transports[room]['breakoutRooms'] = breakoutRoomsArray.map(breakoutRoom => {
+                    return {
+                        ...breakoutRoom,
+                        participants: Object.keys(transports[breakoutRoom.name]['participants']).length
+                    }
+                })
+
+                // Tell each room of new participant numbers and rooms
+                breakoutRoomsArray.forEach(breakoutRoom => {
+                    io.to(breakoutRoom.name).emit('existing-breakout-rooms', transports[room]['breakoutRooms'])
+                })
             }
     
             if(otherParticipants.length > 0) {
@@ -210,7 +221,6 @@ io.on('connection', async (socket) => {
                     otherParticipants,
                     streamType: 'all',
                 })
-
 
                 // Tell new participant that a screen is being projected
                 if(transports[room]['projection']) {
@@ -502,18 +512,28 @@ io.on('connection', async (socket) => {
         }
     })
 
-    // Written so that main room doesn't have a uuid. Need to change when video conferencing
+    // Written so that rooms don't have a uuid. Need to change when video conferencing
     // will be integrated into the system
     socket.on('breakout-room-created', roomTabs => {
+        let hostRoom = null
+
         roomTabs.forEach(roomTab => {
             // IMPORTANT: Needs to be changed to roomTab.id with system development later
             if(roomTab.name === 'Main Room') {
                 transports[roomTab.name]['breakoutRooms'] = roomTabs
-                socket.to(roomTab.name).emit('new-breakout-room', roomTabs)
-                return
+                hostRoom = roomTab
+
+            } else if(hostRoom && transports[roomTab.name]) {
+                transports[roomTab.name]['hostRoom'] = hostRoom
             }
             
             socket.to(roomTab.name).emit('new-breakout-room', roomTabs)
+
+            if(!transports[roomTab.name])
+                transports[roomTab.name] = {
+                    participants: {},
+                    hostRoom
+                }
         })
     })
 
@@ -533,6 +553,23 @@ io.on('connection', async (socket) => {
                 })
 
                 socket.to(room).emit('projection-stopped', projectingUsername)
+            }
+
+            let breakoutRooms = getBreakoutRoomsArray(room)
+            
+            // Update breakout rooms' participants number info
+            if(breakoutRooms.length > 0) {
+                transports[room]['breakoutRooms'] = breakoutRooms.map(breakoutRoom => {
+                    return {
+                        ...breakoutRoom,
+                        participants: Object.keys(transports[breakoutRoom.name]['participants']).length
+                    }
+                })
+
+                // Tell each room of new participant numbers and rooms
+                breakoutRooms.forEach(breakoutRoom => {
+                    io.to(breakoutRoom.name).emit('existing-breakout-rooms', transports[room]['breakoutRooms'])
+                })
             }
         })
 
@@ -592,4 +629,19 @@ const createWebRtcTransport = async (room, currSocketId, callback) => {
             })
         }
     }
+}
+
+// Later to be changed to roomId
+const getBreakoutRoomsArray = (roomName) => {
+    
+    if(transports[roomName]['breakoutRooms'] || transports[roomName]['hostRoom']) {
+        if(transports[roomName]['breakoutRooms'])
+            return transports[roomName]['breakoutRooms']
+        else {
+            let mainRoomName = transports[roomName]['hostRoom'].name
+            return transports[mainRoomName]['breakoutRooms']
+        }
+    }
+
+    return []
 }
