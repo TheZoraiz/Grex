@@ -1,15 +1,43 @@
+require('dotenv').config()
+
 const express = require('express')
 let cors = require('cors')
 const app = express(cors())
+const mongoose = require('mongoose')
 
-let http = require('http').Server(app)
-let io = require('socket.io')(http, {
+const config = require('./config')
+
+const http = require('http')
+const httpServer = http.createServer(app)
+const { Server } = require('socket.io')
+
+let io = new Server(httpServer, {
     cors: {
         origin: '*',
     }
 })
 
-const port = process.env.PORT || 3001
+config.connectDb()
+mongoose.connection.once('error', () => {
+    console.log('Error connecting to database')
+    process.exit()
+})
+mongoose.connection.once('connected', () => console.log('Database connected'))
+
+// ________________________
+// API endpoints henceforth
+
+
+const apiRoutes = require('./api/routes')
+const jwtAuthMiddleware = require('./api/auth')
+const cookieParser = require('cookie-parser')
+
+app.use(cookieParser())
+app.use('/api', jwtAuthMiddleware, apiRoutes)
+
+
+// ____________________________________________
+// Socket.io and mediasoup SFU logic henceforth
 
 const mediasoup = require('mediasoup')
 
@@ -31,10 +59,8 @@ const createWorker = async () => {
 }
 createWorker()
 
-app.use(express.static('public'))
-
-http.listen(port, () => {
-    console.log('Server listening on', port)
+httpServer.listen(config.socketPort, () => {
+    console.log('Server listening on', config.socketPort)
 })
 
 let routers = {}

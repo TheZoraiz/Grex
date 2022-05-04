@@ -1,0 +1,24 @@
+{
+	"name": "media-server",
+	"version": "1.0.0",
+	"main": "server.js",
+	"license": "MIT",
+	"scripts": {
+		"start": "nodemon server.js"
+	},
+	"dependencies": {
+		"browserify": "^17.0.0",
+		"cookie-parser": "^1.4.6",
+		"cors": "^2.8.5",
+		"express": "^4.18.1",
+		"httpolyglot": "^0.1.2",
+		"mediasoup": "^3.9.0",
+		"mediasoup-client": "^3.6.47",
+		"mongoose": "^6.3.2",
+		"socket.io": "^4.3.0"
+	},
+	"devDependencies": {
+		"dotenv": "^16.0.0",
+		"nodemon": "^2.0.13"
+	}
+}
