@@ -483,7 +483,7 @@ const SessionScreen = (props) => {
     }, [consumers])
     
     useEffect(() => {
-        dispatch(setSocket(io(process.env.REACT_APP_MEDIA_SERVER_SOCKET_URL)))
+        dispatch(setSocket(io(process.env.REACT_APP_BACKEND_URI)))
     }, [])
 
     useEffect(async() => {

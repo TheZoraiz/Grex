@@ -1,5 +1,5 @@
 import { configureStore } from '@reduxjs/toolkit'
-import userReducer from '../screens/credentials/userSlice'
+import userReducer from '../screens/login-and-registration/userSlice'
 import sessionReducer from '../screens/video-conference/sessionSlice'
 
 export default configureStore({

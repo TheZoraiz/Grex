@@ -29,11 +29,12 @@ mongoose.connection.once('connected', () => console.log('Database connected'))
 
 
 const apiRoutes = require('./api/routes')
-const jwtAuthMiddleware = require('./api/auth')
 const cookieParser = require('cookie-parser')
 
+app.use(cors())
 app.use(cookieParser())
-app.use('/api', jwtAuthMiddleware, apiRoutes)
+app.use(express.json())
+app.use('/api', apiRoutes)
 
 
 // ____________________________________________
