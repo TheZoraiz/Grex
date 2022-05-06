@@ -31,8 +31,8 @@ mongoose.connection.once('connected', () => console.log('Database connected'))
 const apiRoutes = require('./api/routes')
 const cookieParser = require('cookie-parser')
 
-app.use(cors())
-app.use(cookieParser())
+app.use(cors({ credentials: true, origin: true }))
+app.use(cookieParser(process.env.COOKIE_SECRET))
 app.use(express.json())
 app.use('/api', apiRoutes)
 
@@ -51,10 +51,10 @@ const createWorker = async () => {
         rtcMaxPort: 59999,
     })
 
-    console.log('Worker', worker.pid, 'created')
+    console.log('Mediasoup worker', worker.pid, 'created')
 
     worker.on('died', error => {
-        console.log('Worker', worker.pid, 'died', err)
+        console.log('Mediasoup worker', worker.pid, 'died', err)
         setTimeout(() => process.exit(1), 2000)
     })
 }

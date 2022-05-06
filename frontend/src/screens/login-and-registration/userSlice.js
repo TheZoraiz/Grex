@@ -10,7 +10,25 @@ export const registerUser = createAsyncThunk(
                 email: data.email,
                 password: data.password,
                 retypedPassword: data.retypedPassword,
-            });
+
+            }, { withCredentials: true })
+
+            return response.data
+        } catch (error) {
+            return rejectWithValue(error.response);
+        }
+    }
+)
+
+export const loginUser = createAsyncThunk(
+    'users/loginUser',
+    async (data, { rejectWithValue }) => {
+        try {
+            let response = await axios.post(`${process.env.REACT_APP_BACKEND_URI}/api/login`, {
+                email: data.email,
+                password: data.password,
+
+            }, { withCredentials: true })
 
             return response.data
         } catch (error) {
@@ -22,8 +40,8 @@ export const registerUser = createAsyncThunk(
 export const userSlice = createSlice({
     name: 'user',
     initialState: {
+        registrationMsg: null,
         userData: null,
-        jwtAccessToken: null,
         error: null,
     },
     reducers: {
@@ -33,10 +51,20 @@ export const userSlice = createSlice({
     },
     extraReducers: {
         [registerUser.fulfilled]: (state, action) => {
-            state.jwtAccessToken = action.payload.jwtAccessToken
-            state.userData = action.payload
+            state.registrationMsg = action.payload
         },
         [registerUser.rejected]: (state, action) => {
+            state.error = action.payload
+        },
+
+
+        [loginUser.fulfilled]: (state, action) => {
+            state.userData = {
+                ...action.payload.userData,
+                serverMsg: action.payload.msg
+            }
+        },
+        [loginUser.rejected]: (state, action) => {
             state.error = action.payload
         },
     },

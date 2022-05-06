@@ -4,12 +4,12 @@ const mongoose = require('mongoose')
 const jwtAuthMiddleware = require('../api/auth')
 const bcrypt = require('bcryptjs')
 const crypto = require('crypto')
+const jwt = require('jsonwebtoken')
+const nodemailer = require('nodemailer')
 
 // Models
 const User = require('../db_schemas/User')
 const EmailVerifications = require('../db_schemas/EmailVerifications')
-
-const nodemailer = require('nodemailer')
 
 let transporter = nodemailer.createTransport({
     service: 'gmail',
@@ -32,8 +32,31 @@ router.get('/verifyEmail', async(req, res) => {
     }
 })
 
-router.get('/login', (req, res) => {
-    res.send('<h1>This is the api login route</h1>')
+router.post('/login', async(req, res) => {
+    let reqBody = req.body
+
+    let userData = await User.findOne({ email: reqBody.email }).exec()
+    if(!userData)
+        return res.status(404).send('Email is not registered')
+    
+    if(!bcrypt.compareSync(reqBody.password, userData.password))
+        return res.status(403).send('Password is incorrect')
+        
+    let jwtAccessToken = jwt.sign(
+        {
+            id: userData._id,
+            name: userData.name,
+            email: userData.email,
+        },
+        process.env.ACCESS_TOKEN_SECRET,
+        { expiresIn: '24h' }
+    )
+
+    res.cookie('accessToken', jwtAccessToken, { httpOnly: true, signed: true })
+    return res.send({
+        msg: 'Login successfull',
+        userData,
+    })
 })
 
 router.post('/register', async (req, res) => {
@@ -88,7 +111,15 @@ router.post('/register', async (req, res) => {
 
 })
 
+// JWT Auth middleware used henceforth
 router.use(jwtAuthMiddleware)
 
+// If token is invalid, middleware will return an error and never proceed to this route
+router.get('/verifyToken', (req, res) => {
+    res.send({
+        msg: 'Token is authentic',
+        userData: req.user,
+    })
+})
 
 module.exports = router

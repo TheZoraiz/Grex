@@ -21,6 +21,5 @@ module.exports = mongoose.model('User', new Schema({
         min: 6,
         max: 1024,
     },
-    refreshToken: String,
     
 }, { timestamps: true }))

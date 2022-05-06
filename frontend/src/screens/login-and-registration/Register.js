@@ -33,7 +33,6 @@ const useStyles = makeStyles(theme => ({
 }))
 
 const Register = () => {
-    const theme = useTheme()
     const classes = useStyles()
     const dispatch = useDispatch()
 
@@ -51,7 +50,6 @@ const Register = () => {
     const { userData, error } = useSelector(state => state.user)
 
     useEffect(() => {
-        console.log(userData, error)
         if(error) {
             setOpenSnackbar(true)
             setValidationError({

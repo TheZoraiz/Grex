@@ -1,10 +1,11 @@
 import './App.css'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import Credentials from './screens/credentials/Credentials'
 import VideoConference from './screens/video-conference/VideoConference'
 import Login from './screens/login-and-registration/Login'
 import Register from './screens/login-and-registration/Register'
 import ForgotPassword from './screens/login-and-registration/ForgotPassword'
+import Dashboard from './screens/dashboard/Dashboard'
 import {
 	BrowserRouter,
 	Routes,
@@ -14,7 +15,11 @@ import {
 import {
 	ThemeProvider,
 	createTheme,
+	CircularProgress,
 } from '@mui/material'
+import { useDispatch, useSelector } from 'react-redux'
+import { verifyToken } from './screens/globalSlice'
+
 
 const theme = createTheme({
 	palette: {
@@ -32,6 +37,32 @@ const theme = createTheme({
 })
 
 const App = () => {
+    const dispatch = useDispatch()
+
+    const [loading, setLoading] = useState(true)
+
+	const { tokenVerifiedMsg, error } = useSelector(state => state.global)
+
+	useEffect(() => {
+		console.log(tokenVerifiedMsg, error)
+		if(tokenVerifiedMsg || error)
+			setLoading(false)
+
+	}, [tokenVerifiedMsg, error])
+
+	useEffect(() => {
+		dispatch(verifyToken())
+	}, [])
+
+	if(loading)
+		return (
+            <CircularProgress
+                className='absolute top-1/2 left-1/2'
+                size={50}
+                style={{ marginLeft: -25, marginTop: -25 }}
+            />
+		)
+
 	return (
 		<ThemeProvider theme={theme}>
 			<BrowserRouter>
@@ -40,6 +71,7 @@ const App = () => {
 					<Route path='/login' element={<Login />} />
 					<Route path='/register' element={<Register />} />
 					<Route path='/forgot-password' element={<ForgotPassword />} />
+					<Route path='/dashboard' element={<Dashboard />} />
 					<Route path='/credentials' element={<Credentials />} />
 					<Route path='/conference' element={<VideoConference />} />
 				</Routes>
