@@ -17,7 +17,7 @@ import {
     VisibilityOff as VisibilityOffIcon,
     Send as SendIcon,
 } from '@mui/icons-material'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import validator from 'validator'
 import clsx from 'clsx'
 import { useSelector, useDispatch } from 'react-redux'
@@ -33,6 +33,7 @@ const useStyles = makeStyles(theme => ({
 }))
 
 const Register = () => {
+    const navigate = useNavigate()
     const classes = useStyles()
     const dispatch = useDispatch()
 
@@ -47,9 +48,10 @@ const Register = () => {
     const [validationError, setValidationError] = useState(null)
     const [openSnackbar, setOpenSnackbar] = useState(false)
 
-    const { userData, error } = useSelector(state => state.user)
+    const { registrationMsg, error } = useSelector(state => state.user)
 
     useEffect(() => {
+        console.log(registrationMsg, error)
         if(error) {
             setOpenSnackbar(true)
             setValidationError({
@@ -60,16 +62,17 @@ const Register = () => {
             setLoading(false)
         }
 
-        if(userData) {
+        if(registrationMsg) {
             setOpenSnackbar(true)
             setValidationError({
-                msg: userData,
+                msg: registrationMsg,
                 severity: 'success'
             })
             dispatch(nullifyError())
             setLoading(false)
+            setTimeout(() => navigate('/login'), 3000)
         }
-    }, [userData, error])
+    }, [registrationMsg, error])
 
     const validationErrorMsg = () => {
         if(username === '' || email === '' || password === '' || retypedPassword === '')

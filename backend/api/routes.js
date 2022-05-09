@@ -35,28 +35,72 @@ router.get('/verifyEmail', async(req, res) => {
 router.post('/login', async(req, res) => {
     let reqBody = req.body
 
-    let userData = await User.findOne({ email: reqBody.email }).exec()
-    if(!userData)
-        return res.status(404).send('Email is not registered')
+    try {
+        let userData = await User.findOne({ email: reqBody.email }).exec()
+        if(!userData)
+            return res.status(404).send('Email is not registered')
     
-    if(!bcrypt.compareSync(reqBody.password, userData.password))
-        return res.status(403).send('Password is incorrect')
+        // If not verified, resend verification link and notify user
+        if(!userData.emailVerifiedAt) {
+    
+            let emailVerificationEntry = await EmailVerifications.findOne({ userId: userData._id }).exec()
+            let verificationToken
+    
+            if(!emailVerificationEntry) {
+                verificationToken = crypto.createHash('sha256').update(userData.email).digest('hex')
+                await EmailVerifications.create({
+                    userId: userData._id,
+                    verificationToken,
+                })
+            } else {
+                verificationToken = emailVerificationEntry.verificationToken
+            }
+    
+            let verificationLink = process.env.HOST_URI + '/api/verifyEmail?token=' + verificationToken
+            let mailOptions = {
+                from: process.env.EMAIL,
+                to: reqBody.email,
+                subject: 'Grex - Please verify your account',
+                html: 'Please click the link below <br> <a target="_blank" href="'+verificationLink+'">'+verificationLink+'</a>'
+            }
+    
+            console.log('Sending email...')
+            transporter.sendMail(mailOptions, function (error, info) {
+                if (error) {
+                    console.log(error)
+                    res.status(400).send(error)
+                } else {
+                    console.log('Email sent: ' + info.response)
+                    res.send('Registration successfull and verification email sent')
+                }
+            })
+    
+            return res.status(403).send('Please verify your email. A verification link has been resent')
+        }
         
-    let jwtAccessToken = jwt.sign(
-        {
+        if(!bcrypt.compareSync(reqBody.password, userData.password))
+            return res.status(403).send('Password is incorrect')
+            
+        let jwtUserData = {
             id: userData._id,
             name: userData.name,
             email: userData.email,
-        },
-        process.env.ACCESS_TOKEN_SECRET,
-        { expiresIn: '24h' }
-    )
+            emailVerifiedAt: userData.emailVerifiedAt
+        }
 
-    res.cookie('accessToken', jwtAccessToken, { httpOnly: true, signed: true })
-    return res.send({
-        msg: 'Login successfull',
-        userData,
-    })
+        let jwtAccessToken = jwt.sign(jwtUserData, process.env.ACCESS_TOKEN_SECRET, { expiresIn: '24h' })
+    
+        res.cookie('accessToken', jwtAccessToken, { httpOnly: true, signed: true })
+        return res.send({
+            msg: 'Login successfull',
+            jwtUserData,
+        })
+        
+    } catch (error) {
+
+        console.log(error)
+        res.status(400).send(error)
+    }
 })
 
 router.post('/register', async (req, res) => {
@@ -79,7 +123,7 @@ router.post('/register', async (req, res) => {
     
         await newUser.save()
     
-        let verificationToken = crypto.createHash('sha256').update(reqBody.password).digest('hex')
+        let verificationToken = crypto.createHash('sha256').update(reqBody.email).digest('hex')
         await EmailVerifications.create({
             userId: newUser._id,
             verificationToken,

@@ -41,7 +41,7 @@ export const userSlice = createSlice({
     name: 'user',
     initialState: {
         registrationMsg: null,
-        userData: null,
+        loginServerMsg: null,
         error: null,
     },
     reducers: {
@@ -59,10 +59,8 @@ export const userSlice = createSlice({
 
 
         [loginUser.fulfilled]: (state, action) => {
-            state.userData = {
-                ...action.payload.userData,
-                serverMsg: action.payload.msg
-            }
+            state.loginServerMsg = action.payload.msg
+            state.userData = action.payload.jwtUserData
         },
         [loginUser.rejected]: (state, action) => {
             state.error = action.payload

@@ -5,6 +5,8 @@ import {
 import { useDispatch, useSelector } from 'react-redux'
 import { Navigate } from 'react-router-dom'
 
+import Navbar from '../shared-components/Navbar'
+
 const Dashboard = () => {
     const dispatch = useDispatch()
 
@@ -14,12 +16,13 @@ const Dashboard = () => {
         return (<Navigate to='/' />)
 
     return (
-        <>
-            <Typography>Dashboard</Typography>
-            <pre style={{color: 'white'}}>
+        <div>
+            <Navbar />
+
+            <pre style={{ color: 'white' }}>
                 { JSON.stringify(userData, null, 2) }
             </pre>
-        </>
+        </div>
     )
 }
 

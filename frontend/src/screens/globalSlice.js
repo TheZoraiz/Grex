@@ -25,7 +25,10 @@ export const globalSlice = createSlice({
     reducers: {
         nullifyAuthError: (state, action) => {
             state.error = null
-        }
+        },
+        setUserData: (state, action) => {
+            state.userData = action.payload
+        },
     },
     extraReducers: {
         [verifyToken.fulfilled]: (state, action) => {
@@ -39,6 +42,6 @@ export const globalSlice = createSlice({
 })
 
 // Action creators are generated for each case reducer function
-export const { nullifyAuthError } = globalSlice.actions
+export const { nullifyAuthError, setUserData } = globalSlice.actions
 
 export default globalSlice.reducer

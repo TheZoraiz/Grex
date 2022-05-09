@@ -20,7 +20,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import clsx from 'clsx'
 import { useSelector, useDispatch } from 'react-redux'
 import { loginUser, nullifyError } from './userSlice'
-import { nullifyAuthError } from '../globalSlice'
+import { nullifyAuthError, setUserData } from '../globalSlice'
 
 import grex_login_image from '../../assets/images/grex_login_image.png'
 
@@ -44,7 +44,7 @@ const Login = () => {
     const [openSnackbar, setOpenSnackbar] = useState(false)
     const [snackbarError, setSnackbarError] = useState(null)
 
-    const { userData, error } = useSelector(state => state.user)
+    const { loginServerMsg, userData, error } = useSelector(state => state.user)
     const { tokenVerifiedMsg, error: authError } = useSelector(state => state.global)
 
     useEffect(() => {
@@ -71,17 +71,21 @@ const Login = () => {
             return
         }
 
-        if(userData || tokenVerifiedMsg) {
+        if(loginServerMsg || tokenVerifiedMsg) {
             setOpenSnackbar(true)
             setSnackbarError({
-                msg: userData?.serverMsg || tokenVerifiedMsg,
+                msg: loginServerMsg || tokenVerifiedMsg,
                 severity: 'success'
             })
             setLoading(false)
+
+            if(loginServerMsg)
+                dispatch(setUserData(userData))
+
             navigate('/dashboard')
             return
         }
-    }, [userData, error, authError, tokenVerifiedMsg])
+    }, [loginServerMsg, error, authError, tokenVerifiedMsg])
 
     const loginSubmitHandler = () => {
         if(email === '' || password === '') {
