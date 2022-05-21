@@ -4,9 +4,8 @@ import {
     Tabs,
     Tab,
     Box,
-    Button,
+    CircularProgress,
 } from '@mui/material'
-import { styled } from '@mui/styles'
 import PropTypes from 'prop-types';
 import { useDispatch, useSelector } from 'react-redux'
 import { toast } from 'react-toastify';
@@ -25,6 +24,7 @@ function TabPanel(props) {
             hidden={value !== index}
             id={`vertical-tabpanel-${index}`}
             aria-labelledby={`vertical-tab-${index}`}
+            style={{ width: '100%' }}
             {...other}
         >
             {value === index && (
@@ -59,8 +59,6 @@ const Groups = () => {
 
     const handleTabChange = (event, newValue) => {
         setTabValue(newValue);
-        console.log('event', event)
-        console.log('newValue', newValue)
     };
 
     useEffect(() => {
@@ -76,9 +74,20 @@ const Groups = () => {
     }, [fetchError])
 
     if(!userGroups)
-        return 'Loading...'
+        return (
+            <CircularProgress
+                className='absolute top-1/2 left-1/2'
+                size={50}
+                style={{ marginLeft: -25, marginTop: -25 }}
+            />
+        )
 
-    console.log('userGroups', userGroups)
+    if(userGroups?.length === 0)
+        return (
+            <Typography>
+                You haven't created or joined a group
+            </Typography>
+        )
 
     return (
         <div className='flex'>

@@ -39,7 +39,7 @@ router.post('/login', async(req, res) => {
     let reqBody = req.body
 
     try {
-        let userData = await User.findOne({ email: reqBody.email }).exec()
+        let userData = await User.findOne({ email: reqBody.email }).select('+password').exec()
         if(!userData)
             return res.status(404).send('Email is not registered')
     
@@ -102,7 +102,7 @@ router.post('/login', async(req, res) => {
     } catch (error) {
 
         console.log(error)
-        res.status(400).send(error)
+        res.status(500).send(error)
     }
 })
 
@@ -181,10 +181,10 @@ router.post('/create-group', async(req, res) => {
         if(await Group.findOne({ host: user.id, name: reqBody.groupName }).exec())
             return res.status(409).send(`You've already created group ${reqBody.groupName}`)
 
-        let groupJoinCode = crypto.randomBytes(10).toString('base64')
+        let groupJoinCode = crypto.randomBytes(12).toString('base64')
         
         while(await Group.findOne({ joinCode: groupJoinCode }).exec())
-            groupJoinCode = crypto.randomBytes(10).toString('base64')
+            groupJoinCode = crypto.randomBytes(12).toString('base64')
             
         await Group.create({
             name: reqBody.groupName,
