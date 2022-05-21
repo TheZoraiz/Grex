@@ -13,10 +13,6 @@ const useStyles = makeStyles(theme => ({
     videoFlip: {
         transform: 'scaleX(-1)',
     },
-    buttomPane: {
-        backgroundColor: 'black',
-        height: '20%',
-    },
 }))
 
 const ParticipantWindow = (props) => {
@@ -83,15 +79,14 @@ const ParticipantWindow = (props) => {
     }, [partSelfVidEl, partScreenVidEl, selfMicAudioEl, selfStream, screenStream])
 
     return (
-        <Grid container className={classes.participantContainer}>
+        <Grid container className={clsx('relative', classes.participantContainer)}>
             {selfStream &&  (
                 <>
                     <audio ref={selfMicAudioEl} style={{ display: 'none' }} autoPlay />
                     <Grid
                         item
                         xs={screenStream ? 6 : 12}
-                        className={'flex justify-center items-center ' + (props.cameraPaused ? 'hidden' : 'block')}
-                        style={{ height: '80%' }}
+                        className={'h-full flex justify-center items-center ' + (props.cameraPaused ? 'hidden' : 'block')}
                     >
                         <video
                             id={props.id}
@@ -104,7 +99,7 @@ const ParticipantWindow = (props) => {
                 </>
             )}
             {screenStream && (
-                <Grid item xs={props.cameraPaused ? 12 : 6} className='flex justify-center items-center' style={{ height: '80%' }}>
+                <Grid item xs={props.cameraPaused ? 12 : 6} className='h-full flex justify-center items-center'>
                     <video
                         autoPlay
                         ref={partScreenVidEl}
@@ -113,8 +108,8 @@ const ParticipantWindow = (props) => {
                     />
                 </Grid>
             )}
-            <div className={clsx('w-full p-3', classes.buttomPane)}>
-                <Typography>
+            <div className='w-full p-3 absolute bottom-0 left-0'>
+                <Typography style={{ textShadow: '0 0 10px black' }}>
                     { props.username }
                 </Typography>
             </div>

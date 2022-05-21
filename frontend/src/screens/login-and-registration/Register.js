@@ -6,10 +6,7 @@ import {
     IconButton,
     Button,
     Link as MuiLink,
-    Snackbar,
-    Alert,
     CircularProgress as CircularProgressIcon,
-    useTheme,
 } from '@mui/material'
 import { makeStyles } from '@mui/styles'
 import {
@@ -21,7 +18,8 @@ import { Link, useNavigate } from 'react-router-dom'
 import validator from 'validator'
 import clsx from 'clsx'
 import { useSelector, useDispatch } from 'react-redux'
-import { registerUser, nullifyError } from './userSlice'
+import { toast } from 'react-toastify'
+import { registerUser, nullifyError } from '../slices/userSlice'
 
 import grex_login_image from '../../assets/images/grex_login_image.png'
 
@@ -39,37 +37,27 @@ const Register = () => {
 
     const [username, setUsername] = useState('Zoraiz')
     const [email, setEmail] = useState('hzoraiz2@gmail.com')
-    const [password, setPassword] = useState('dilwale')
-    const [retypedPassword, setRetypedPassword] = useState('dilwale')
+    const [password, setPassword] = useState('abcd')
+    const [retypedPassword, setRetypedPassword] = useState('abcd')
     const [showPassword, setShowPassword] = useState(false)
-
-    const [loading, setLoading] = useState(false)
-
-    const [validationError, setValidationError] = useState(null)
-    const [openSnackbar, setOpenSnackbar] = useState(false)
 
     const { registrationMsg, error } = useSelector(state => state.user)
 
     useEffect(() => {
-        console.log(registrationMsg, error)
         if(error) {
-            setOpenSnackbar(true)
-            setValidationError({
-                msg: error.data,
-                severity: 'error'
-            })
+            toast.update(
+                'registration',
+                { render: error.data, type: 'error', isLoading: false, autoClose: 5000, draggable: true, closeOnClick: true }
+            )
             dispatch(nullifyError())
-            setLoading(false)
         }
 
         if(registrationMsg) {
-            setOpenSnackbar(true)
-            setValidationError({
-                msg: registrationMsg,
-                severity: 'success'
-            })
+            toast.update(
+                'registration',
+                { render: registrationMsg, type: 'success', isLoading: false, autoClose: 5000, draggable: true, closeOnClick: true }
+            )
             dispatch(nullifyError())
-            setLoading(false)
             setTimeout(() => navigate('/login'), 3000)
         }
     }, [registrationMsg, error])
@@ -91,11 +79,7 @@ const Register = () => {
         let errorMsg = validationErrorMsg()
 
         if(errorMsg !== '') {
-            setValidationError({
-                msg: errorMsg,
-                severity: 'error'
-            })
-            setOpenSnackbar(true)
+            toast.error(errorMsg)
             return
         }
 
@@ -105,12 +89,7 @@ const Register = () => {
             password,
             retypedPassword,
         }))
-        setLoading(true)
-    }
-
-    const handleSnackbarClose = () => {
-        setOpenSnackbar(false)
-        setValidationError(null)
+        toast.loading('Registering user...', { toastId: 'registration' })
     }
 
     return (
@@ -192,11 +171,7 @@ const Register = () => {
                         className='normal-case font-bold'
                         variant='contained'
                         onClick={registrationSubmitHandler}
-                        startIcon={
-                            loading
-                            ? <CircularProgressIcon size={25} sx={{ color: (theme) => theme.palette.background.dark }} />
-                            : <SendIcon />
-                        }
+                        startIcon={<SendIcon />}
                     >
                         Submit
                     </Button>
@@ -205,23 +180,6 @@ const Register = () => {
             <div className={clsx('m-2 w-full md:w-6/12 flex justify-center items-center', classes.loginImage)}>
                 <img src={grex_login_image} className='h-full m-2' />
             </div>
-
-            {/* To show errors */}
-            <Snackbar
-                open={openSnackbar && validationError}
-                autoHideDuration={3000}
-                onClose={handleSnackbarClose}
-                anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
-            >
-                <Alert
-                    onClose={handleSnackbarClose}
-                    severity={validationError ? validationError.severity : 'warning'}
-                    variant='filled'
-                    sx={{ width: '100%' }}
-                >
-                    { validationError ? validationError.msg: 'An error occured' }
-                </Alert>
-            </Snackbar>
         </div>
     )
 }

@@ -19,7 +19,7 @@ import {
 } from '@mui/icons-material';
 import { useSelector, useDispatch } from 'react-redux'
 import { v4 as uuidv4 } from 'uuid'
-import { setSocket } from './sessionSlice'
+import { setSocket } from '../slices/sessionSlice'
 
 import SessionScreen from './SessionScreen'
 
@@ -60,7 +60,7 @@ function a11yProps(index) {
 function VideoConference() {
     const dispatch = useDispatch()
     const { socket } = useSelector(state => state.session)
-    const { username, joinRoom } = useSelector(state => state.user)
+    const { username, roomName } = useSelector(state => state.credentials)
     const [tabValue, setTabValue] = useState(0)
 
     const [breakoutRoomNameDialogOpen, setBreakoutRoomNameDialogOpen] = useState(false)

@@ -29,7 +29,7 @@ import { io } from 'socket.io-client'
 import clsx from 'clsx'
 
 import ParticipantWindow from './ParticipantWindow'
-import { setSocket } from './sessionSlice'
+import { setSocket } from '../slices/sessionSlice'
 
 const videoConstraints = {
     video: {

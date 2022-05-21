@@ -7,9 +7,12 @@ const crypto = require('crypto')
 const jwt = require('jsonwebtoken')
 const nodemailer = require('nodemailer')
 
+const util = require('./util')
+
 // Models
 const User = require('../db_schemas/User')
-const EmailVerifications = require('../db_schemas/EmailVerifications')
+const EmailVerification = require('../db_schemas/EmailVerification')
+const Group = require('../db_schemas/Group')
 
 let transporter = nodemailer.createTransport({
     service: 'gmail',
@@ -21,7 +24,7 @@ let transporter = nodemailer.createTransport({
 
 router.get('/verifyEmail', async(req, res) => {
     try {
-        let verificationEntry = await EmailVerifications.findOne({ verificationToken: req.query.token }).exec()
+        let verificationEntry = await EmailVerification.findOne({ verificationToken: req.query.token }).exec()
         await User.updateOne({ _id: verificationEntry.userId }, { emailVerifiedAt: new Date() })
 
         res.send('<h3>Your email has been verified!</h3>')
@@ -43,12 +46,12 @@ router.post('/login', async(req, res) => {
         // If not verified, resend verification link and notify user
         if(!userData.emailVerifiedAt) {
     
-            let emailVerificationEntry = await EmailVerifications.findOne({ userId: userData._id }).exec()
+            let emailVerificationEntry = await EmailVerification.findOne({ userId: userData._id }).exec()
             let verificationToken
     
             if(!emailVerificationEntry) {
                 verificationToken = crypto.createHash('sha256').update(userData.email).digest('hex')
-                await EmailVerifications.create({
+                await EmailVerification.create({
                     userId: userData._id,
                     verificationToken,
                 })
@@ -124,7 +127,7 @@ router.post('/register', async (req, res) => {
         await newUser.save()
     
         let verificationToken = crypto.createHash('sha256').update(reqBody.email).digest('hex')
-        await EmailVerifications.create({
+        await EmailVerification.create({
             userId: newUser._id,
             verificationToken,
         })
@@ -152,7 +155,6 @@ router.post('/register', async (req, res) => {
         console.log(error)
         res.status(400).send(error)
     }
-
 })
 
 // JWT Auth middleware used henceforth
@@ -165,5 +167,81 @@ router.get('/verifyToken', (req, res) => {
         userData: req.user,
     })
 })
+
+router.get('/logout', (req, res) => {
+    res.clearCookie('accessToken', { httpOnly: true, signed: true })
+    res.send('Successfully logged out')
+})
+
+router.post('/create-group', async(req, res) => {
+    let reqBody = req.body
+    let user = req.user
+
+    try {
+        if(await Group.findOne({ host: user.id, name: reqBody.groupName }).exec())
+            return res.status(409).send(`You've already created group ${reqBody.groupName}`)
+
+        let groupJoinCode = crypto.randomBytes(10).toString('base64')
+        
+        while(await Group.findOne({ joinCode: groupJoinCode }).exec())
+            groupJoinCode = crypto.randomBytes(10).toString('base64')
+            
+        await Group.create({
+            name: reqBody.groupName,
+            joinCode: groupJoinCode,
+            host: mongoose.Types.ObjectId(user.id)
+        })
+
+        res.send(`Group ${reqBody.groupName} created successfully`)
+
+    } catch (error) {
+        console.log(error)
+        res.status(500).send(error)
+    }
+})
+
+router.post('/join-group', async(req, res) => {
+    let reqBody = req.body
+    let user = req.user
+
+    try {
+        let groupToJoin = await Group.findOne({ joinCode: reqBody.joinCode }).exec()
+        if(!groupToJoin)
+            return res.status(404).send('There is no such group with this join code')
+
+        if(groupToJoin.host.toString() === user.id)
+            return res.status(403).send('You cannot join this group because you are its host')
+
+        if(groupToJoin.members.indexOf(mongoose.Types.ObjectId(user.id)) !== -1)
+            return res.status(403).send('You are already a member of this group')
+
+        groupToJoin.members.push(mongoose.Types.ObjectId(user.id))
+        await groupToJoin.save()
+
+        res.send(`Joined group ${groupToJoin.name} successfully`)
+
+    } catch (error) {
+        console.log(error)
+        res.status(500).send(error)
+    }
+})
+
+router.get('/get-user-groups', async(req, res) => {
+    let user = req.user
+    
+    try {        
+        let userGroups = await Group.find().or([
+            { host: mongoose.Types.ObjectId(user.id) },
+            { members: mongoose.Types.ObjectId(user.id) }
+        ]).populate(['host', 'members']).exec()
+        
+        res.send(userGroups)
+
+    } catch (error) {
+        console.log(error)
+        res.status(500).send(error)
+    }    
+})
+
 
 module.exports = router

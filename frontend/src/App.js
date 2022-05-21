@@ -19,7 +19,8 @@ import {
 } from '@mui/material'
 import { useDispatch, useSelector } from 'react-redux'
 import { verifyToken } from './screens/globalSlice'
-
+import { ToastContainer } from 'react-toastify'
+import 'react-toastify/dist/ReactToastify.css'
 
 const theme = createTheme({
 	palette: {
@@ -76,6 +77,14 @@ const App = () => {
 					<Route path='/conference' element={<VideoConference />} />
 				</Routes>
 			</BrowserRouter>
+
+            {/* For notifications */}
+            <ToastContainer
+                hideProgressBar
+                theme='colored'
+                position='top-center'
+				className='w-full md:w-4/12'
+            />
 		</ThemeProvider>
 	);
 }

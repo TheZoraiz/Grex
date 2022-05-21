@@ -47,6 +47,7 @@ export const userSlice = createSlice({
     reducers: {
         nullifyError: (state, action) => {
             state.error = null
+            state.registrationMsg = null
         },
     },
     extraReducers: {

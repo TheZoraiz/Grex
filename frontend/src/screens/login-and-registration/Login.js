@@ -6,8 +6,6 @@ import {
     IconButton,
     Button,
     Link as MuiLink,
-    Snackbar,
-    Alert,
     CircularProgress as CircularProgressIcon,
 } from '@mui/material'
 import { makeStyles } from '@mui/styles'
@@ -19,7 +17,8 @@ import {
 import { Link, useNavigate } from 'react-router-dom'
 import clsx from 'clsx'
 import { useSelector, useDispatch } from 'react-redux'
-import { loginUser, nullifyError } from './userSlice'
+import { toast } from 'react-toastify'
+import { loginUser, nullifyError as nullifyLoginError } from '../slices/userSlice'
 import { nullifyAuthError, setUserData } from '../globalSlice'
 
 import grex_login_image from '../../assets/images/grex_login_image.png'
@@ -36,48 +35,43 @@ const Login = () => {
     const dispatch = useDispatch()
     const classes = useStyles()
 
-    const [email, setEmail] = useState('')
-    const [password, setPassword] = useState('')
+    const [email, setEmail] = useState('hzoraiz2@gmail.com')
+    const [password, setPassword] = useState('abcd')
     const [showPassword, setShowPassword] = useState(false)
-    
-    const [loading, setLoading] = useState(false);
-    const [openSnackbar, setOpenSnackbar] = useState(false)
-    const [snackbarError, setSnackbarError] = useState(null)
 
-    const { loginServerMsg, userData, error } = useSelector(state => state.user)
+    const { loginServerMsg, userData, error: loginError } = useSelector(state => state.user)
     const { tokenVerifiedMsg, error: authError } = useSelector(state => state.global)
+
+    useEffect(() => {
+        console.log('loginServerMsg, tokenVerifiedMsg, authError, loginError:', loginServerMsg, tokenVerifiedMsg, authError, loginError)
+    }, [loginServerMsg, tokenVerifiedMsg, authError, loginError])
 
     useEffect(() => {
 
         if(authError) {
-            setOpenSnackbar(true)
-            setSnackbarError({
-                msg: authError.data,
-                severity: 'error'
-            })
+            toast.update(
+                'login',
+                { render: authError.data, type: 'error', isLoading: false, autoClose: 5000, draggable: true, closeOnClick: true }
+            )
             dispatch(nullifyAuthError())
-            setLoading(false)
             return
         }
 
-        if(error) {
-            console.log(error)
-            setOpenSnackbar(true)
-            setSnackbarError({
-                msg: error.data,
-                severity: 'error'
-            })
-            setLoading(false)
+        if(loginError) {
+            console.log(loginError)
+            toast.update(
+                'login',
+                { render: loginError.data, type: 'error', isLoading: false, autoClose: 5000, draggable: true, closeOnClick: true }
+            )
+            dispatch(nullifyLoginError())
             return
         }
 
         if(loginServerMsg || tokenVerifiedMsg) {
-            setOpenSnackbar(true)
-            setSnackbarError({
-                msg: loginServerMsg || tokenVerifiedMsg,
-                severity: 'success'
-            })
-            setLoading(false)
+            toast.update(
+                'login',
+                { render: loginServerMsg || tokenVerifiedMsg, type: 'success', isLoading: false, autoClose: 5000, draggable: true, closeOnClick: true }
+            )
 
             if(loginServerMsg)
                 dispatch(setUserData(userData))
@@ -85,15 +79,11 @@ const Login = () => {
             navigate('/dashboard')
             return
         }
-    }, [loginServerMsg, error, authError, tokenVerifiedMsg])
+    }, [loginServerMsg, loginError, authError, tokenVerifiedMsg])
 
     const loginSubmitHandler = () => {
         if(email === '' || password === '') {
-            setOpenSnackbar(true)
-            setSnackbarError({
-                msg: 'Please enter your email and password',
-                severity: 'error'
-            })
+            toast.error('Please enter your email and password')
             return
         }
 
@@ -101,13 +91,7 @@ const Login = () => {
             email,
             password,
         }))
-        setLoading(true)
-    }
-
-    const handleSnackbarClose = () => {
-        setOpenSnackbar(false)
-        setSnackbarError(null)
-        dispatch(nullifyError())
+        toast.loading('Logging in...', { toastId: 'login' })
     }
 
     return (
@@ -127,6 +111,7 @@ const Login = () => {
                     className='mb-5 w-8/12'
                     variant='outlined'
                     label='Enter your email'
+                    value={email}
                     onChange={(event) => setEmail(event.target.value)}
                 />
                 <TextField
@@ -134,6 +119,7 @@ const Login = () => {
                     variant='outlined'
                     label='Enter your password'
                     type={showPassword ? 'text' : 'password'}
+                    value={password}
                     onChange={(event) => setPassword(event.target.value)}
                     InputProps={{
                         endAdornment: (
@@ -160,11 +146,7 @@ const Login = () => {
                         className='normal-case font-bold'
                         variant='contained'
                         onClick={loginSubmitHandler}
-                        startIcon={
-                            loading
-                            ? <CircularProgressIcon size={25} sx={{ color: (theme) => theme.palette.background.dark }} />
-                            : <SendIcon />
-                        }
+                        startIcon={<SendIcon />}
                     >
                         Submit
                     </Button>
@@ -173,23 +155,6 @@ const Login = () => {
             <div className={clsx('m-2 w-full md:w-6/12 flex justify-center items-center', classes.loginImage)}>
                 <img src={grex_login_image} className='h-full m-2' />
             </div>
-
-            {/* To show errors */}
-            <Snackbar
-                open={openSnackbar}
-                autoHideDuration={3000}
-                onClose={handleSnackbarClose}
-                anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
-            >
-                <Alert
-                    onClose={handleSnackbarClose}
-                    severity={snackbarError ? snackbarError.severity : 'warning'}
-                    variant='filled'
-                    sx={{ width: '100%' }}
-                >
-                    { snackbarError ? snackbarError.msg: 'An error occured' }
-                </Alert>
-            </Snackbar>
         </div>
     )
 }

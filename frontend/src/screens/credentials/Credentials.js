@@ -7,7 +7,7 @@ import {
 import { makeStyles } from '@mui/styles'
 import { useDispatch } from 'react-redux'
 import { useNavigate } from 'react-router-dom'
-import {  } from '../login-and-registration/userSlice'
+import { setUsername, setRoomName } from '../slices/credentialsSlice'
 
 const useStyles = makeStyles(theme => ({
     root: {
@@ -33,14 +33,14 @@ const Credentials = (props) => {
             <TextField
                 label='Name'
                 variant='outlined'
-                // onChange={(e) => dispatch(setUsername(e.target.value))}
+                onChange={(e) => dispatch(setUsername(e.target.value))}
             />
             <br />
 
             <TextField
                 label='Room'
                 variant='outlined'
-                // onChange={(e) => dispatch(setJoinRoom(e.target.value))}
+                onChange={(e) => dispatch(setRoomName(e.target.value))}
             />
             <br />
 
