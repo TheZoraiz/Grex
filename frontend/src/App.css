@@ -3,10 +3,27 @@
 @tailwind utilities;
 
 html, body {
-  	background-color: #282c34;
+	background-color: #282c34;
 }
 
 .App {
 	text-align: center;
 	background-color: #282c34;
+}
+
+/* Scroll 5 */
+::-webkit-scrollbar {
+	width: 10px;
+	height: 10px;
+}
+
+::-webkit-scrollbar-track {
+	border-radius: 10px;
+	background-color: rgba(255, 255, 255, 0.1);
+}
+
+::-webkit-scrollbar-thumb {
+	background-image: linear-gradient(45deg, #42a5f5, #42a5f5);
+	border-radius: 10px;
+	-webkit-box-shadow: rgba(0, 0, 0, .12) 0 3px 13px 1px;
 }

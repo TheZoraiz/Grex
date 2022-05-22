@@ -5,15 +5,25 @@ import {
     Tab,
     Box,
     Button,
+    useTheme,
 } from '@mui/material'
+import { makeStyles } from '@mui/styles'
 import PropTypes from 'prop-types';
 import { useDispatch, useSelector } from 'react-redux'
 import { Navigate, useNavigate } from 'react-router-dom'
+import clsx from 'clsx';
 
 import Groups from './Groups'
 import Navbar from '../shared-components/Navbar'
 
+const useStyles = makeStyles(theme => ({
+    bodyContainer: {
+        height: '90vh',
+    }
+}))
+
 function TabPanel(props) {
+    const theme = useTheme()
     const { children, value, index, ...other } = props;
 
     return (
@@ -26,8 +36,8 @@ function TabPanel(props) {
             {...other}
         >
             {value === index && (
-                <Box sx={{ px: 1 }}>
-                    <Typography>{children}</Typography>
+                <Box sx={{ px: 1, height: '100%' }} color={theme.typography.allVariants.color}>
+                    {children}
                 </Box>
             )}
         </div>
@@ -48,6 +58,7 @@ function a11yProps(index) {
 }
 
 const Dashboard = () => {
+    const classes = useStyles()
     const navigate = useNavigate();
     const dispatch = useDispatch();
 
@@ -66,7 +77,7 @@ const Dashboard = () => {
         <div>
             <Navbar />
 
-            <div className='flex'>
+            <div className={clsx('flex overflow-hidden', classes.bodyContainer)}>
                 <Tabs
                     orientation='vertical'
                     value={tabValue}

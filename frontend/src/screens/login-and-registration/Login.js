@@ -49,10 +49,7 @@ const Login = () => {
     useEffect(() => {
 
         if(authError) {
-            toast.update(
-                'login',
-                { render: authError.data, type: 'error', isLoading: false, autoClose: 5000, draggable: true, closeOnClick: true }
-            )
+            toast.error(authError.data)
             dispatch(nullifyAuthError())
             return
         }
@@ -68,13 +65,13 @@ const Login = () => {
         }
 
         if(loginServerMsg || tokenVerifiedMsg) {
-            toast.update(
-                'login',
-                { render: loginServerMsg || tokenVerifiedMsg, type: 'success', isLoading: false, autoClose: 5000, draggable: true, closeOnClick: true }
-            )
-
-            if(loginServerMsg)
+            if(loginServerMsg) {
+                toast.update(
+                    'login',
+                    { render: loginServerMsg, type: 'success', isLoading: false, autoClose: 5000, draggable: true, closeOnClick: true }
+                )
                 dispatch(setUserData(userData))
+            }
 
             navigate('/dashboard')
             return

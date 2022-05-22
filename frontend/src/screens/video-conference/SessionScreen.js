@@ -116,7 +116,7 @@ const useStyles = makeStyles(theme => ({
     },
     projectionVideoStyle: {
         borderRadius: 10,
-        boxShadow: '0 0 10px'
+        boxShadow: `0 0 10px black`
     },
 }))
 

@@ -13,11 +13,13 @@ import {
     DialogActions,
     Button,
 } from '@mui/material'
+import { makeStyles } from '@mui/styles'
 import {
     AddCircle as AddCircleIcon,
 } from '@mui/icons-material'
 import { useDispatch, useSelector } from 'react-redux'
 import { toast } from 'react-toastify'
+import clsx from 'clsx'
 
 import { logout, nullifyLogoutData } from '../globalSlice'
 import {
@@ -27,7 +29,14 @@ import {
     nullifyRequestData as nullifyGroupRequestData,
 } from '../slices/groupSlice'
 
+const useStyles = makeStyles(theme => ({
+    navbarContainer: {
+        height: '10vh',
+    }
+}))
+
 const Navbar = () => {
+    const classes = useStyles()
     const dispatch = useDispatch()
 
     const { userData, logoutMsg, error: logoutError } = useSelector(state => state.global)
@@ -141,7 +150,7 @@ const Navbar = () => {
     }, [logoutMsg, logoutError, groupMsg, groupError])
 
     return (
-        <div className='w-full h-16 px-5 flex items-center justify-between'>
+        <div className={clsx('w-full px-5 flex items-center justify-between', classes.navbarContainer)}>
             {/* Left portion */}
             <div>
                 <Typography variant='h4' className='font-bold'>

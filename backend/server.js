@@ -17,6 +17,8 @@ let io = new Server(httpServer, {
     }
 })
 
+const GroupMessage = require('./db_schemas/GroupMessage')
+
 config.connectDb()
 mongoose.connection.once('error', () => {
     console.log('Error connecting to database')
@@ -92,8 +94,40 @@ let mediaCodecs = [
         }
     }    
 ]
+let groupMessages = {}
 
 io.on('connection', async (socket) => {
+
+    // ______________________________________
+    // Group chat socket endpoints henceforth
+
+    socket.on('get-group-messages', async (groupId, callback) => {
+        if(!groupMessages[groupId])
+            groupMessages[groupId] = await GroupMessage.find({ groupId }).populate('userId').exec()
+        
+        socket.join(groupId)
+        callback(groupMessages[groupId])
+        console.log('Group messages: ', groupMessages)
+    })
+
+    socket.on('send-group-message', async ({ userId, groupId, message }, callback) => {
+        const newMessage = new GroupMessage({
+            userId: mongoose.Types.ObjectId(userId),
+            groupId: mongoose.Types.ObjectId(groupId),
+            message,
+        })
+        await newMessage.save()
+        await newMessage.populate('userId')
+        
+        groupMessages[groupId].push(newMessage)    
+        io.to(groupId).emit('new-group-message', groupMessages[groupId]);
+
+        console.log('Group messages: ', groupMessages)
+    })
+
+
+    // ___________________________________________
+    // Media streaming socket endpoints henceforth
 
     socket.on('create-or-join', async (room) => {
 

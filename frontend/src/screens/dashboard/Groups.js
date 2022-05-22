@@ -28,8 +28,8 @@ function TabPanel(props) {
             {...other}
         >
             {value === index && (
-                <Box sx={{ px: 2 }}>
-                    <Typography>{children}</Typography>
+                <Box sx={{ px: 2, height: '100%' }}>
+                    {children}
                 </Box>
             )}
         </div>
@@ -90,15 +90,16 @@ const Groups = () => {
         )
 
     return (
-        <div className='flex'>
+        <div className='flex h-full'>
             <Tabs
                 orientation='vertical'
                 value={tabValue}
                 onChange={handleTabChange}
                 sx={{ borderRight: 1, borderColor: 'divider' }}
             >
-                {userGroups?.map(group => (
+                {userGroups?.map((group, index) => (
                     <Tab
+                        key={index}
                         className='normal-case'
                         label={group.name}
                         {...a11yProps(0)}
@@ -106,7 +107,7 @@ const Groups = () => {
                 ))}
             </Tabs>
             {userGroups?.map((group, index) => (
-                <TabPanel value={tabValue} index={index}>
+                <TabPanel value={tabValue} index={index} key={index}>
                     <GroupScreen group={group} />
                 </TabPanel>
             ))}

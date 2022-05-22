@@ -45,7 +45,6 @@ const App = () => {
 	const { tokenVerifiedMsg, error } = useSelector(state => state.global)
 
 	useEffect(() => {
-		console.log(tokenVerifiedMsg, error)
 		if(tokenVerifiedMsg || error)
 			setLoading(false)
 
