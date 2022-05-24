@@ -107,7 +107,6 @@ io.on('connection', async (socket) => {
         
         socket.join(groupId)
         callback(groupMessages[groupId])
-        console.log('Group messages: ', groupMessages)
     })
 
     socket.on('send-group-message', async ({ userId, groupId, message }, callback) => {
@@ -121,8 +120,6 @@ io.on('connection', async (socket) => {
         
         groupMessages[groupId].push(newMessage)    
         io.to(groupId).emit('new-group-message', groupMessages[groupId]);
-
-        console.log('Group messages: ', groupMessages)
     })
 
 
@@ -184,12 +181,18 @@ io.on('connection', async (socket) => {
     socket.on('transport-connect', async ({ dtlsParameters, consumerTransportId, isConsumer, room }) => {
         console.log('dtlsParameters recieved from socket', socket.id)
         
-        if(isConsumer) {
-            await transports[room]['participants'][socket.id].consumerTransport.connect({ dtlsParameters })
-            // await transports[room][socket.id]['consumerTransport'].connect({ dtlsParameters })
-
-        } else {
-            await transports[room]['participants'][socket.id].producerTransport.connect({ dtlsParameters })
+        try {
+            if(isConsumer) {
+                await transports[room]['participants'][socket.id].consumerTransport.connect({ dtlsParameters })
+                // await transports[room][socket.id]['consumerTransport'].connect({ dtlsParameters })
+    
+            } else {
+                await transports[room]['participants'][socket.id].producerTransport.connect({ dtlsParameters })
+            }
+        
+        } catch (error) {
+            console.log(error)
+            io.to(socket.id).emit('transport-connect-failed', error);
         }
     })
 
@@ -374,11 +377,6 @@ io.on('connection', async (socket) => {
                     break
                 
                 case 'all':
-                    participantProducers = {
-                        cameraVideoProducer: transports[room]['participants'][participantSocketId]['cameraVideoProducer'],
-                        micAudioProducer: transports[room]['participants'][participantSocketId]['micAudioProducer'],
-                    }
-
                     // Check if participant has paused mic or camera. We always initialize camera and mic
                     // consumers on server and client-side so we use booleans to decide whether to show them
                     // or not
@@ -390,6 +388,12 @@ io.on('connection', async (socket) => {
                         Object.assign(participantProducers, {
                             micPaused: transports[room]['participants'][participantSocketId]['micPaused'],
                         })
+
+                    participantProducers = {
+                        ...participantProducers,
+                        cameraVideoProducer: transports[room]['participants'][participantSocketId]['cameraVideoProducer'],
+                        micAudioProducer: transports[room]['participants'][participantSocketId]['micAudioProducer'],
+                    }
 
                     // Because participant may or may not be sharing a screen
                     if(transports[room]['participants'][participantSocketId]['screenVideoProducer'])
@@ -485,6 +489,7 @@ io.on('connection', async (socket) => {
                     // Tell participant that this specific producer cannot be consumed
                     console.log('Cannot consume', participantSocketId+'\'s', producerType)
                     io.to(socket.id).emit('cannot-consume-producer', { participantSocketId, producerType })
+                    break
                 }
             }
             

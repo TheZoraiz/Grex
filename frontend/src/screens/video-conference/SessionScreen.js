@@ -337,16 +337,15 @@ const SessionScreen = (props) => {
                         return
                     }
 
+                    if(params.participantSocketId && !tempConsumers[params.participantSocketId])
+                        tempConsumers[params.participantSocketId] = {}
+
                     if(params.hasOwnProperty('cameraPaused')) {
-                        Object.assign(tempConsumers[params.participantSocketId], {
-                            cameraPaused: params.cameraPaused,
-                        })
+                        tempConsumers[params.participantSocketId].cameraPaused = params.cameraPaused
                         continue
                     }
                     if(params.hasOwnProperty('micPaused')) {
-                        Object.assign(tempConsumers[params.participantSocketId], {
-                            micPaused: params.micPaused,
-                        })
+                        tempConsumers[params.participantSocketId].micPaused = params.micPaused
                         continue
                     }
                     
@@ -356,8 +355,6 @@ const SessionScreen = (props) => {
                         kind: params.kind,
                         rtpParameters: params.rtpParameters
                     })
-            
-                    console.log('Consumer made:', tempConsumer)
             
                     if(streamType === 'projection') {
                         await socket.emit('consumer-resume', {
@@ -512,7 +509,7 @@ const SessionScreen = (props) => {
                 for(let i = 0; i < otherParticipants.length; i++) {
                     await consumeParticipant(otherParticipants[i], streamType)
                 }
-
+                
                 setConsumers(currConsumers => {
                     let newConsumers = {
                         ...currConsumers,
@@ -704,14 +701,21 @@ const SessionScreen = (props) => {
     }
 
     const toggleSelfStream = (type) => {
+        let relevantTrack
+
         switch(type) {
             case 'camera':
-                cameraVideoProducer.paused ? cameraVideoProducer.resume() : cameraVideoProducer.pause()
-                setCameraPaused(cameraVideoProducer.paused)
+                relevantTrack = localStream.getVideoTracks()[0]
+                if(relevantTrack.enabled)
+                    relevantTrack.enabled = false
+                else
+                    relevantTrack.enabled = true
+                    
+                setCameraPaused(!relevantTrack.enabled)
                 socket.emit('camera-toggle', {
                     room: joinRoom,
-                    paused: cameraVideoProducer.paused,
-                    resumed: !cameraVideoProducer.paused,
+                    paused: !relevantTrack.enabled,
+                    resumed: relevantTrack.enabled,
                 })
 
                 break

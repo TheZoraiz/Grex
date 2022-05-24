@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef } from 'react'
-import { Grid, Typography } from '@mui/material'
+import { Grid, Typography, Avatar } from '@mui/material'
 import { makeStyles } from '@mui/styles'
 import clsx from 'clsx'
 
@@ -12,6 +12,15 @@ const useStyles = makeStyles(theme => ({
     },
     videoFlip: {
         transform: 'scaleX(-1)',
+    },
+    participantAvatar: {
+        position: 'absolute',
+        top: '50%',
+        left: '50%',
+        width: 50,
+        height: 50,
+        marginLeft: -25,
+        marginTop: -25,
     },
 }))
 
@@ -63,15 +72,19 @@ const ParticipantWindow = (props) => {
     }, [props.consumers, props.selfStream, props.screenStream])
 
     useEffect(() => {
-        if(selfMicAudioEl.current && selfStream && props.cameraPaused) {
-            selfMicAudioEl.current.srcObject = selfStream
-            partSelfVidEl.current = null
-            
-        } else if(partSelfVidEl.current && selfStream) {
-            partSelfVidEl.current.srcObject = selfStream
-            selfMicAudioEl.current = null
+        if(props.cameraPaused) {
+            if(selfMicAudioEl.current && selfStream) {
+                selfMicAudioEl.current.srcObject = selfStream
+                partSelfVidEl.current.srcObject = null
+            }
+
+        } else {
+            if(partSelfVidEl.current && selfStream) {
+                partSelfVidEl.current.srcObject = selfStream
+                selfMicAudioEl.current.srcObject = null
+            }
         }
-            
+        
         if(partScreenVidEl.current && screenStream)
             partScreenVidEl.current.srcObject = screenStream
 
@@ -80,6 +93,12 @@ const ParticipantWindow = (props) => {
 
     return (
         <Grid container className={clsx('relative', classes.participantContainer)}>
+            {props.cameraPaused && !screenStream && (
+                <Avatar
+                    className={classes.participantAvatar}
+                    src={props.participantPic}
+                />
+            )}
             {selfStream &&  (
                 <>
                     <audio ref={selfMicAudioEl} style={{ display: 'none' }} autoPlay />
