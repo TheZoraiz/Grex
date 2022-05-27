@@ -63,6 +63,8 @@ const createWorker = async () => {
         logLevel: 'error',
         rtcMinPort: 40000,
         rtcMaxPort: 49999,
+        dtlsPrivateKeyFile: path.join(__dirname, 'cert', 'key.pem'),
+        dtlsCertificateFile: path.join(__dirname, 'cert', 'cert.pem'),
     })
 
     console.log('Mediasoup worker', worker.pid, 'created')
