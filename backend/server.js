@@ -36,7 +36,11 @@ const cookieParser = require('cookie-parser')
 app.use(cors({ credentials: true, origin: true }))
 app.use(cookieParser(process.env.COOKIE_SECRET))
 app.use(express.json())
+app.use(express.static('public'))
 app.use('/api', apiRoutes)
+app.all('*', (req, res) => {
+    res.redirect('/');
+});
 
 
 // ____________________________________________
@@ -49,8 +53,8 @@ let worker
 const createWorker = async () => {
     worker = await mediasoup.createWorker({
         logLevel: 'error',
-        rtcMinPort: 10000,
-        rtcMaxPort: 59999,
+        rtcMinPort: 40000,
+        rtcMaxPort: 49999,
     })
 
     console.log('Mediasoup worker', worker.pid, 'created')
@@ -145,6 +149,8 @@ io.on('connection', async (socket) => {
 
         socket.join(room)
 
+        console.log(socket.id, 'joined room', room)
+
         io.to(socket.id).emit('rtp-capabilities', {
             rtpCapabilities: routers[room].rtpCapabilities,
             isCreator
@@ -179,7 +185,7 @@ io.on('connection', async (socket) => {
     })
 
     socket.on('transport-connect', async ({ dtlsParameters, consumerTransportId, isConsumer, room }) => {
-        console.log('dtlsParameters recieved from socket', socket.id)
+        console.log(`${socket.id}'s ${isConsumer ? 'consumer' : 'producer'} transport is connecing`)
         
         try {
             if(isConsumer) {
@@ -227,119 +233,127 @@ io.on('connection', async (socket) => {
 
         let tempProducer
 
-        if(sharingMode === 'projection') {
-            if(!transports[room]['projection'])
-                transports[room]['projection'] = {}
 
-            transports[room]['projection']['username'] = transports[room]['participants'][socket.id]['username']
-            transports[room]['projection']['userSocketId'] = socket.id
-            transports[room]['projection'][producerName] = await socketProducerTransport.produce({
-                kind, rtpParameters
-            })
-            tempProducer = transports[room]['projection'][producerName]
+        try {
 
-        } else {
-            transports[room]['participants'][socket.id][producerName] = await socketProducerTransport.produce({
-                kind, rtpParameters
-            })
-            tempProducer = transports[room]['participants'][socket.id][producerName]
-        }
+            if(sharingMode === 'projection') {
+                if(!transports[room]['projection'])
+                    transports[room]['projection'] = {}
 
-        tempProducer.on('transportclose', () => {
-            console.log('Transport for', socket.id, 'has closed')
-            tempProducer.close()
-        })
-
-        // Inform everyone of new participant, and new participant of other participants
-        // AFTER new participant's producer has been made on server and locally
-        if(
-            sharingMode === 'self'
-            && transports[room]['participants'][socket.id]['cameraVideoProducer']
-            && transports[room]['participants'][socket.id]['micAudioProducer']
-        ) {
-            let otherParticipants = []
-    
-            otherParticipants = Object.keys(transports[room]['participants']).filter(id => id !== socket.id);
-
-            let breakoutRoomsArray = getBreakoutRoomsArray(room)
-
-            // Tell newly joined participant about breakout rooms if they exist
-            if(breakoutRoomsArray.length > 0) {
-                // Update participant numbers
-                transports[room]['breakoutRooms'] = breakoutRoomsArray.map(breakoutRoom => {
-                    return {
-                        ...breakoutRoom,
-                        participants: Object.keys(transports[breakoutRoom.name]['participants']).length
-                    }
+                transports[room]['projection']['username'] = transports[room]['participants'][socket.id]['username']
+                transports[room]['projection']['userSocketId'] = socket.id
+                transports[room]['projection'][producerName] = await socketProducerTransport.produce({
+                    kind, rtpParameters
                 })
+                tempProducer = transports[room]['projection'][producerName]
 
-                // Tell each room of new participant numbers and rooms
-                breakoutRoomsArray.forEach(breakoutRoom => {
-                    io.to(breakoutRoom.name).emit('existing-breakout-rooms', transports[room]['breakoutRooms'])
+            } else {
+                transports[room]['participants'][socket.id][producerName] = await socketProducerTransport.produce({
+                    kind, rtpParameters
                 })
+                tempProducer = transports[room]['participants'][socket.id][producerName]
             }
-    
-            if(otherParticipants.length > 0) {
-                // Send list of participants to newly joined participant
-                io.to(socket.id).emit('other-participants', {
-                    otherParticipants,
-                    streamType: 'all',
-                })
 
-                // Tell new participant that a screen is being projected
-                if(transports[room]['projection']) {
-                    io.to(socket.id).emit('new-stream', {
-                        otherParticipants,
-                        streamType: 'projection',
+            tempProducer.on('transportclose', () => {
+                console.log('Transport for', socket.id, 'has closed')
+                tempProducer.close()
+            })
+
+            // Inform everyone of new participant, and new participant of other participants
+            // AFTER new participant's producer has been made on server and locally
+            if(
+                sharingMode === 'self'
+                && transports[room]['participants'][socket.id]['cameraVideoProducer']
+                && transports[room]['participants'][socket.id]['micAudioProducer']
+            ) {
+                let otherParticipants = []
+        
+                otherParticipants = Object.keys(transports[room]['participants']).filter(id => id !== socket.id);
+
+                let breakoutRoomsArray = getBreakoutRoomsArray(room)
+
+                // Tell newly joined participant about breakout rooms if they exist
+                if(breakoutRoomsArray.length > 0) {
+                    // Update participant numbers
+                    transports[room]['breakoutRooms'] = breakoutRoomsArray.map(breakoutRoom => {
+                        return {
+                            ...breakoutRoom,
+                            participants: Object.keys(transports[breakoutRoom.name]['participants']).length
+                        }
+                    })
+
+                    // Tell each room of new participant numbers and rooms
+                    breakoutRoomsArray.forEach(breakoutRoom => {
+                        io.to(breakoutRoom.name).emit('existing-breakout-rooms', transports[room]['breakoutRooms'])
                     })
                 }
         
-                // Send newly joined participant's info to all other participants
-                otherParticipants.forEach(socketId => {
-                    io.to(socketId).emit('new-stream', {
-                        participantSocketId: socket.id,
+                if(otherParticipants.length > 0) {
+                    // Send list of participants to newly joined participant
+                    io.to(socket.id).emit('other-participants', {
+                        otherParticipants,
+                        streamType: 'all',
+                    })
+
+                    // Tell new participant that a screen is being projected
+                    if(transports[room]['projection']) {
+                        io.to(socket.id).emit('new-stream', {
+                            otherParticipants,
+                            streamType: 'projection',
+                        })
+                    }
+            
+                    // Send newly joined participant's info to all other participants
+                    otherParticipants.forEach(socketId => {
+                        io.to(socketId).emit('new-stream', {
+                            participantSocketId: socket.id,
+                            streamType: sharingMode,
+                        })
+                    })
+                }
+            }
+
+            if(
+                (sharingMode === 'screen' && transports[room]['participants'][socket.id]['screenVideoProducer'])
+                || (sharingMode === 'projection' && transports[room]['projection']['projectionVideoProducer'])
+                // && transports[room][socket.id]['screenAudioProducer']
+            ) {
+                otherParticipants = Object.keys(transports[room]['participants']).filter(id => id !== socket.id);
+        
+                if(otherParticipants.length > 0) {
+                    // Tell others participant that participant is sharing screen
+                    otherParticipants.forEach(socketId => {
+                        io.to(socketId).emit('new-stream', {
+                            participantSocketId: socket.id,
+                            streamType: sharingMode,
+                        })
+                    })
+                }
+            }
+
+            if(
+                sharingMode === 'projection'
+                && transports[room]['projection']['projectionVideoProducer']
+            ) {
+                otherParticipants = Object.keys(transports[room]['participants']).filter(id => id !== socket.id);
+        
+                if(otherParticipants.length > 0) {
+                    // Tell others participant that participant is projecting screen
+                    socket.broadcast.emit('projecting', {
                         streamType: sharingMode,
                     })
-                })
+                }
             }
+
+            console.log('transports', transports)
+            console.log(`transports[${room}]`, transports[room])
+
+            callback({ id: tempProducer.id })
+
+        } catch(error) {
+            console.log(error)
+            io.to(socket.id).emit('transport-produce-failed', error);
         }
-
-        if(
-            (sharingMode === 'screen' && transports[room]['participants'][socket.id]['screenVideoProducer'])
-            || (sharingMode === 'projection' && transports[room]['projection']['projectionVideoProducer'])
-            // && transports[room][socket.id]['screenAudioProducer']
-        ) {
-            otherParticipants = Object.keys(transports[room]['participants']).filter(id => id !== socket.id);
-    
-            if(otherParticipants.length > 0) {
-                // Tell others participant that participant is sharing screen
-                otherParticipants.forEach(socketId => {
-                    io.to(socketId).emit('new-stream', {
-                        participantSocketId: socket.id,
-                        streamType: sharingMode,
-                    })
-                })
-            }
-        }
-
-        if(
-            sharingMode === 'projection'
-            && transports[room]['projection']['projectionVideoProducer']
-        ) {
-            otherParticipants = Object.keys(transports[room]['participants']).filter(id => id !== socket.id);
-    
-            if(otherParticipants.length > 0) {
-                // Tell others participant that participant is projecting screen
-                socket.broadcast.emit('projecting', {
-                    streamType: sharingMode,
-                })
-            }
-        }
-
-        console.log('transports', transports)
-        console.log(`transports[${room}]`, transports[room])
-
-        callback({ id: tempProducer.id })
     })
 
     socket.on('consume-participant', async({ rtpCapabilities, participantSocketId, room, sharingMode }, callback) => {
@@ -648,8 +662,8 @@ const createWebRtcTransport = async (room, currSocketId, callback) => {
         const webRtcTransportOptions = {
             listenIps: [
                 {
-                    ip: '0.0.0.0', // replace with server's public IP address
-                    announcedIp: '127.0.0.1',
+                    ip: process.env.MEDIASOUP_LISTEN_IP || '0.0.0.0', // replace with server's public IP address
+                    announcedIp: process.env.MEDIASOUP_ANNOUNCED_IP || '127.0.0.1',
                 }
             ],
             enableUdp: true,

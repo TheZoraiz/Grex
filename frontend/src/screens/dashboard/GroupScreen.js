@@ -121,6 +121,10 @@ const GroupScreen = (props) => {
 
     useEffect(() => {
         dispatch(setSocket(io(process.env.REACT_APP_BACKEND_URI)))
+
+        return () => {
+            dispatch(setSocket(null))
+        }
     }, [])
 
     useEffect(async() => {

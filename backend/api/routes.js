@@ -22,6 +22,11 @@ let transporter = nodemailer.createTransport({
     }
 })
 
+router.get('/memory', (req, res) => {
+    const usedMem = process.memoryUsage().heapUsed / 1024 / 1024;
+    res.send(`<h1> Approximately ${Math.round(usedMem * 100) / 100} MBs </h1>`);
+})
+
 router.get('/verifyEmail', async(req, res) => {
     try {
         let verificationEntry = await EmailVerification.findOne({ verificationToken: req.query.token }).exec()

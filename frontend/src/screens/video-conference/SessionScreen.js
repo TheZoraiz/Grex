@@ -651,6 +651,7 @@ const SessionScreen = (props) => {
             device = null
             producerTransport = null
             consumerTransport = null
+            dispatch(setSocket(null))
         }
     }, [socket])
 
