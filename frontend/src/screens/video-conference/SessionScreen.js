@@ -21,15 +21,19 @@ import {
     Mic as MicIcon,
     Videocam as VideocamIcon,
     GridView as GridViewIcon,
+    CallEnd as CallEndIcon,
 } from '@mui/icons-material';
 import { makeStyles, styled } from '@mui/styles'
 import * as mediasoupClient from 'mediasoup-client'
 import { useSelector, useDispatch } from 'react-redux'
+import { useNavigate } from 'react-router-dom'
 import { io } from 'socket.io-client'
 import clsx from 'clsx'
 
 import ParticipantWindow from './ParticipantWindow'
 import { setSocket } from '../slices/sessionSlice'
+import { toast } from 'react-toastify';
+import { nullifyAuthError } from '../globalSlice';
 
 const videoConstraints = {
     video: {
@@ -131,11 +135,13 @@ const CustomTooltip = styled(({ className, ...props }) => (
 
 const SessionScreen = (props) => {
     const classes = useStyles()
+    const navigate = useNavigate()
     const dispatch = useDispatch()
 
     const { username, joinRoom } = props;
 
     const { socket } = useSelector(state => state.session)
+    const { userData } = useSelector(state => state.global)
     // const [socket, setSocket] = useState(null)
 
     const [localStream, setLocalStream] = useState(null);
@@ -403,7 +409,7 @@ const SessionScreen = (props) => {
             await device.load({ routerRtpCapabilities })
             console.log('Device created', device)
 
-            socket.emit('web-rtc-transport', { room: joinRoom, username }, async({ params }) => {
+            socket.emit('web-rtc-transport', { room: joinRoom, username, userId: userData.id }, async({ params }) => {
                 // Callback fires when we get transport parameters on the server-side after it's created
                 if(params.error) {
                     setError(params.error)
@@ -624,6 +630,17 @@ const SessionScreen = (props) => {
                 logAlert(`${projectingUsername} has stopped projecting the screen`, 'info')
             })
 
+            socket.on('already-joined', () => {
+                toast.error('You\'ve already joined this session in another tab or window')
+                closeAllStreams()
+                navigate('/dashboard')
+            })
+
+            socket.on('session-ended', () => {
+                toast.error('The host has ended the session')
+                endSessionSequence()
+            })
+
             // new-participant is still left !!
     
             let stream = await navigator.mediaDevices.getUserMedia(videoConstraints)
@@ -644,7 +661,7 @@ const SessionScreen = (props) => {
             // In case participant changed to breakout room and sharingMode is different
             sharingMode = 'self'
 
-            socket.emit('create-or-join', joinRoom)
+            socket.emit('create-or-join', { room: joinRoom, userId: userData.id})
         }
 
         return () => {
@@ -734,6 +751,54 @@ const SessionScreen = (props) => {
         }
     }
 
+    const handleEndSession = () => {
+        if(props.sessionHostId !== userData.id) {
+            endSessionSequence()
+            return
+        }
+        
+        // Because sessionId is the parent room
+        if(Object.keys(consumers).length === 0) {
+            socket.emit('end-session', props.sessionId, () => {
+                endSessionSequence()
+            })
+        } else {
+            if(window.confirm('This will boot all participants from the session. Are you sure?')) {
+                socket.emit('end-session', props.sessionId, () => {
+                    endSessionSequence()
+                })
+            }
+        }
+    }
+
+    const endSessionSequence = () => {
+        socket.disconnect()
+        device = null
+        producerTransport = null
+        consumerTransport = null
+        dispatch(setSocket(null))
+        closeAllStreams()
+        navigate('/dashboard')
+    }
+
+    const closeAllStreams = () => {
+        localStream?.getTracks().forEach(track => track.stop())
+        setLocalStream(null)
+
+        localScreenShareStream?.getTracks().forEach(track => track.stop())
+        setLocalScreenShareStream(null)
+
+        localProjectionStream?.getTracks().forEach(track => track.stop())
+        setLocalProjectionStream(null)
+
+        setCameraVideoProducer(null)
+        setMicAudioProducer(null)
+        setScreenVideoProducer(null)
+        setScreenAudioProducer(null)
+        setProjectionVideoProducer(null)
+        setProjectionAudioProducer(null)
+    }
+
     return (
         <div className='w-full flex flex-col justify-center'>
             <div className={clsx('flex mx-5 my-3', classes.participantsContainer)}>
@@ -794,6 +859,7 @@ const SessionScreen = (props) => {
                     >
                         <VideocamIcon htmlColor='#3C3C3C' />
                     </IconButton>
+
                     <IconButton
                         color='primary'
                         title={micPaused ? 'Resume microphone' : 'Pause microphone'}
@@ -802,6 +868,7 @@ const SessionScreen = (props) => {
                     >
                         <MicIcon htmlColor='#3C3C3C' />
                     </IconButton>
+
                     <IconButton
                         color='primary'
                         title='Share or project a screen'
@@ -832,10 +899,11 @@ const SessionScreen = (props) => {
                             </MenuItem>
                         </CustomTooltip>
                     </Menu>
+
                     <IconButton
                         color='primary'
                         title='Choose grid items numbering'
-                        className={clsx('ml-1', classes.controlIcon)}
+                        className={clsx('mx-1', classes.controlIcon)}
                         onClick={(event) => {
                             setGridAnchorEl(event.currentTarget)
                             setGridAnchorElOpen(true)
@@ -875,6 +943,15 @@ const SessionScreen = (props) => {
                             />
                         </div>
                     </Popover>
+
+                    <IconButton
+                        color='primary'
+                        title='End session'
+                        className={clsx('ml-1', classes.controlIconStop)}
+                        onClick={handleEndSession}
+                    >
+                        <CallEndIcon htmlColor='#3C3C3C' />
+                    </IconButton>
                 </div>
             </div>
             

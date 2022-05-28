@@ -7,16 +7,24 @@ const mongoose = require('mongoose')
 
 const config = require('./config')
 
+let httpServer
 const https = require('https')
+const http = require('http')
 const path = require('path')
 const fs = require('fs')
-const httpServer = https.createServer(
-    {
-      key: fs.readFileSync(path.join(__dirname, 'cert', 'key.pem')),
-      cert: fs.readFileSync(path.join(__dirname, 'cert', 'cert.pem')),
-    },
-    app
-)
+
+if(process.env.RUNNING_MODE === 'production') {
+    httpServer = https.createServer(
+        {
+          key: fs.readFileSync(path.join(__dirname, 'cert', 'key.pem')),
+          cert: fs.readFileSync(path.join(__dirname, 'cert', 'cert.pem')),
+        },
+        app
+    )
+} else {
+    httpServer = http.createServer(app)
+}
+
 const { Server } = require('socket.io')
 
 let io = new Server(httpServer, {
@@ -26,6 +34,7 @@ let io = new Server(httpServer, {
 })
 
 const GroupMessage = require('./db_schemas/GroupMessage')
+const Session = require('./db_schemas/Session')
 
 config.connectDb()
 mongoose.connection.once('error', () => {
@@ -107,18 +116,38 @@ let mediaCodecs = [
     }    
 ]
 let groupMessages = {}
+let groupSessions = {}
 
 io.on('connection', async (socket) => {
 
-    // ______________________________________
-    // Group chat socket endpoints henceforth
+    // _________________________________
+    // Group socket endpoints henceforth
 
-    socket.on('get-group-messages', async (groupId, callback) => {
+    socket.on('get-group-data', async (groupId, callback) => {
         if(!groupMessages[groupId])
             groupMessages[groupId] = await GroupMessage.find({ groupId }).populate('userId').exec()
+
+        if(!groupSessions[groupId])
+            groupSessions[groupId] = await Session.find({ groupId }).populate('groupId').exec()
         
         socket.join(groupId)
-        callback(groupMessages[groupId])
+        callback({
+            groupMessages: groupMessages[groupId],
+            groupSessions: groupSessions[groupId],
+        })
+    })
+    
+    socket.on('start-group-session', async (groupId, callback) => {
+        const newSession = new Session({
+            groupId: groupId,
+            status: 'ongoing',
+        })
+        await newSession.save()
+        await newSession.populate('groupId')
+
+        groupSessions[groupId].push(newSession)
+        socket.to(groupId).emit('new-group-session-started', newSession);
+        callback(newSession)
     })
 
     socket.on('send-group-message', async ({ userId, groupId, message }, callback) => {
@@ -138,9 +167,17 @@ io.on('connection', async (socket) => {
     // ___________________________________________
     // Media streaming socket endpoints henceforth
 
-    socket.on('create-or-join', async (room) => {
+    socket.on('create-or-join', async ({ room, userId }) => {
 
         let isCreator
+
+        if(transports[room]?.participants) {
+            let roomUserIds = Object.values(transports[room]['participants']).map(participant => participant.userId)
+            if(roomUserIds.indexOf(userId) !== -1) {
+                io.to(socket.id).emit('already-joined')
+                return
+            }
+        }
 
         // if room exists
         if (routers[room]) {
@@ -165,7 +202,7 @@ io.on('connection', async (socket) => {
         })
     })
 
-    socket.on('web-rtc-transport', async ({ room, username }, callback) => {
+    socket.on('web-rtc-transport', async ({ room, username, userId }, callback) => {
 
         if(!transports[room])
             transports[room] = { participants: {} }
@@ -174,6 +211,7 @@ io.on('connection', async (socket) => {
             ...transports[room]['participants'],
             [socket.id]: {
                 username,
+                userId,
                 producerTransport: await createWebRtcTransport(room, socket.id, callback),
                 consumerTransport: await createWebRtcTransport(room, socket.id, undefined),
             }
@@ -241,7 +279,6 @@ io.on('connection', async (socket) => {
 
         let tempProducer
 
-
         try {
 
             if(sharingMode === 'projection') {
@@ -286,13 +323,13 @@ io.on('connection', async (socket) => {
                     transports[room]['breakoutRooms'] = breakoutRoomsArray.map(breakoutRoom => {
                         return {
                             ...breakoutRoom,
-                            participants: Object.keys(transports[breakoutRoom.name]['participants']).length
+                            participants: Object.keys(transports[breakoutRoom.id]['participants']).length
                         }
                     })
 
                     // Tell each room of new participant numbers and rooms
                     breakoutRoomsArray.forEach(breakoutRoom => {
-                        io.to(breakoutRoom.name).emit('existing-breakout-rooms', transports[room]['breakoutRooms'])
+                        io.to(breakoutRoom.id).emit('existing-breakout-rooms', transports[room]['breakoutRooms'])
                     })
                 }
         
@@ -608,21 +645,45 @@ io.on('connection', async (socket) => {
         roomTabs.forEach(roomTab => {
             // IMPORTANT: Needs to be changed to roomTab.id with system development later
             if(roomTab.name === 'Main Room') {
-                transports[roomTab.name]['breakoutRooms'] = roomTabs
+                transports[roomTab.id]['breakoutRooms'] = roomTabs
                 hostRoom = roomTab
 
-            } else if(hostRoom && transports[roomTab.name]) {
-                transports[roomTab.name]['hostRoom'] = hostRoom
+            } else if(hostRoom && transports[roomTab.id]) {
+                transports[roomTab.id]['hostRoom'] = hostRoom
             }
             
-            socket.to(roomTab.name).emit('new-breakout-room', roomTabs)
+            socket.to(roomTab.id).emit('new-breakout-room', roomTabs)
 
-            if(!transports[roomTab.name])
-                transports[roomTab.name] = {
+            if(!transports[roomTab.id])
+                transports[roomTab.id] = {
                     participants: {},
                     hostRoom
                 }
         })
+    })
+
+    socket.on('end-session', async(room, callback) => {
+        socket.to(room).emit('session-ended')
+
+        let breakoutRooms = getBreakoutRoomsArray(room)
+            
+        if(breakoutRooms.length > 0) {
+            breakoutRooms.forEach(breakoutRoom => {
+                io.to(breakoutRoom.id).emit('session-ended')
+                delete transports[breakoutRoom.id]
+            })
+        }
+        delete transports[room]
+        callback()
+
+        let session = await Session.findById(room).exec()
+        session.status = 'finished'
+        await session.save()
+
+        let groupId = session.groupId.toString()
+
+        groupSessions[groupId] = await Session.find({ groupId }).populate('groupId').exec()
+        io.to(groupId).emit('new-session-data', groupSessions[groupId])
     })
 
     socket.on('disconnect', () => {
@@ -650,13 +711,13 @@ io.on('connection', async (socket) => {
                 transports[room]['breakoutRooms'] = breakoutRooms.map(breakoutRoom => {
                     return {
                         ...breakoutRoom,
-                        participants: Object.keys(transports[breakoutRoom.name]['participants']).length
+                        participants: Object.keys(transports[breakoutRoom.id]['participants']).length
                     }
                 })
 
                 // Tell each room of new participant numbers and rooms
                 breakoutRooms.forEach(breakoutRoom => {
-                    io.to(breakoutRoom.name).emit('existing-breakout-rooms', transports[room]['breakoutRooms'])
+                    io.to(breakoutRoom.id).emit('existing-breakout-rooms', transports[room]['breakoutRooms'])
                 })
             }
         })
@@ -720,14 +781,14 @@ const createWebRtcTransport = async (room, currSocketId, callback) => {
 }
 
 // Later to be changed to roomId
-const getBreakoutRoomsArray = (roomName) => {
+const getBreakoutRoomsArray = (roomId) => {
     
-    if(transports[roomName]['breakoutRooms'] || transports[roomName]['hostRoom']) {
-        if(transports[roomName]['breakoutRooms'])
-            return transports[roomName]['breakoutRooms']
+    if(transports[roomId]['breakoutRooms'] || transports[roomId]['hostRoom']) {
+        if(transports[roomId]['breakoutRooms'])
+            return transports[roomId]['breakoutRooms']
         else {
-            let mainRoomName = transports[roomName]['hostRoom'].name
-            return transports[mainRoomName]['breakoutRooms']
+            let mainRoomId = transports[roomId]['hostRoom'].id
+            return transports[mainRoomId]['breakoutRooms']
         }
     }
 

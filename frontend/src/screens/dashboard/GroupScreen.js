@@ -24,7 +24,7 @@ import clsx from 'clsx';
 
 import GroupMessage from './GroupMessage';
 
-import { setSocket } from '../slices/sessionSlice'
+import { setSocket, setSessionInfo } from '../slices/sessionSlice'
 
 const useStyles = makeStyles(theme => ({
     copyToClipboard: {
@@ -85,10 +85,12 @@ const GroupScreen = (props) => {
     const dispatch = useDispatch()
 
     const { userData } = useSelector(state => state.global)
-    const { socket: groupSocket } = useSelector(state => state.session)
+    const { socket: groupSocket, sessionInfo: reduxSessionInfo } = useSelector(state => state.session)
 
     const [message, setMessage] = useState('')
+    const [ongoingSession, setOngoingSession] = useState(null)
     const [groupMessages, setGroupMessages] = useState(null)
+    const [groupSessions, setGroupSessions] = useState(null)
 
     const [tabValue, setTabValue] = useState(0)
 
@@ -102,7 +104,7 @@ const GroupScreen = (props) => {
     }
 
     const handleSendGroupMessage = () => {
-        if(groupSocket) {
+        if(groupSocket && message) {
             groupSocket.emit('send-group-message', {
                 userId: userData.id,
                 groupId: props.group._id,
@@ -112,10 +114,30 @@ const GroupScreen = (props) => {
         }
     }
 
+    const getOngoingSession = (groupSessions) => {
+        for(let i = 0; i < groupSessions.length; i++)
+            if(groupSessions[i].status === 'ongoing') {
+                setOngoingSession(groupSessions[i])
+                toast.info('There is an ongoing session. Please join')
+                return
+            }
+        setOngoingSession(null)
+    }
+
+    const handleStartSession = () => {
+        groupSocket.emit('start-group-session', props.group._id, (newSession) => setOngoingSession(newSession))
+    }
+
+    const handleJoinSession = () => {
+        dispatch(setSessionInfo(ongoingSession))
+        dispatch(setSocket(null))
+        navigate('/conference')
+    }
+
     useEffect(() => {
         if(groupMessages?.length > 0) {
             let messagesContainer = document.getElementById('messages-container');
-            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+            messagesContainer.scrollTop = messagesContainer?.scrollHeight;
         }
     }, [groupMessages])
 
@@ -135,9 +157,22 @@ const GroupScreen = (props) => {
             groupSocket.on('new-group-message', (newGroupMessages) => {
                 setGroupMessages(newGroupMessages)
             })
+            groupSocket.on('new-group-session-started', (newSession) => {
+                setOngoingSession(newSession);
+                toast.info(`${props.group.host.name} just started a new session`)
+            })
+            groupSocket.on('new-session-data', (newSessionData) => {
+                setGroupSessions(newSessionData)
+                getOngoingSession(newSessionData)
 
-            groupSocket.emit('get-group-messages', props.group._id, (recievedGroupMessages) => {
-                setGroupMessages(recievedGroupMessages)
+                if(userData.id !== props.group.host._id)
+                    toast.info('The group\'s current session just ended')
+            })
+
+            groupSocket.emit('get-group-data', props.group._id, ({ groupMessages, groupSessions }) => {
+                setGroupMessages(groupMessages)
+                setGroupSessions(groupSessions)
+                getOngoingSession(groupSessions)
             })
         }
     }, [groupSocket])
@@ -163,14 +198,34 @@ const GroupScreen = (props) => {
                     />
                 </Tabs>
 
-                {userData.id === props.group.host._id && (
-                    <Tooltip title='Group join code' arrow>
-                        <div className={classes.copyToClipboard} onClick={handleJoinCodeClick}>
-                            <ContentCopyIcon className='mr-1' />
-                            { props.group.joinCode }
-                        </div>
-                    </Tooltip>
-                )}
+                <div className='flex items-center'>
+                    {ongoingSession && (
+                        <Button
+                            className='normal-case'
+                            variant='contained'
+                            onClick={handleJoinSession}
+                        >
+                            Join Session
+                        </Button>
+                    )}
+                    {!ongoingSession && userData.id === props.group.host._id && (
+                        <Button
+                            className='normal-case'
+                            variant='contained'
+                            onClick={handleStartSession}
+                        >
+                            Start Session
+                        </Button>
+                    )}
+                    {userData.id === props.group.host._id && (
+                        <Tooltip title='Group join code' className='ml-2' arrow>
+                            <div className={classes.copyToClipboard} onClick={handleJoinCodeClick}>
+                                <ContentCopyIcon className='mr-1' />
+                                { props.group.joinCode }
+                            </div>
+                        </Tooltip>
+                    )}
+                </div>
             </div>
             
             {/* Chat */}
@@ -184,7 +239,7 @@ const GroupScreen = (props) => {
                         />
                     ))}
                     {/* <pre>
-                        {JSON.stringify(groupMessages, null, 2)}
+                        {JSON.stringify(groupSessions, null, 2)}
                     </pre> */}
                 </div>
                 

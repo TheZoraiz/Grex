@@ -4,7 +4,7 @@ export const credentialsSlice = createSlice({
     name: 'credentials',
     initialState: {
         username: null,
-        roomName: null,
+        roomName: '',
     },
     reducers: {
         setUsername: (state, action) => {

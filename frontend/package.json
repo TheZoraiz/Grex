@@ -39,8 +39,8 @@
 		"wait-on": "^6.0.0"
 	},
 	"scripts": {
-		"desktop": "concurrently \"BROWSER=none yarn web\" \"wait-on http://localhost:3000 && electron .\"",
-		"web": "react-scripts start",
+		"desktop": "REACT_APP_BACKEND_URI=http://localhost:3001 concurrently \"BROWSER=none yarn web\" \"wait-on http://localhost:3000 && electron .\"",
+		"web": "REACT_APP_BACKEND_URI=http://localhost:3001 react-scripts start",
 		"build": "react-scripts build",
 		"test": "react-scripts test",
 		"eject": "react-scripts eject"

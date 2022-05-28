@@ -59,14 +59,15 @@ function a11yProps(index) {
 
 function VideoConference() {
     const dispatch = useDispatch()
-    const { socket } = useSelector(state => state.session)
-    const { username, roomName } = useSelector(state => state.credentials)
+    const { socket, sessionInfo } = useSelector(state => state.session)
+    const { userData } = useSelector(state => state.global)
+
     const [tabValue, setTabValue] = useState(0)
 
     const [breakoutRoomNameDialogOpen, setBreakoutRoomNameDialogOpen] = useState(false)
     const [tempRoomName, setTempRoomName] = useState('')
     const [roomTabs, setRoomTabs] = useState([{
-        id: uuidv4(),
+        id: sessionInfo._id,
         name: 'Main Room',
         participants: 0,
     }])
@@ -130,8 +131,10 @@ function VideoConference() {
                 <TabPanel value={tabValue} index={index}>
                     <SessionScreen
                         // IMPORTANT: Needs to be changed to roomTab.id with system development later
-                        joinRoom={roomTab.name}
-                        username={username}
+                        joinRoom={roomTab.id}
+                        username={userData.name}
+                        sessionId={sessionInfo._id}
+                        sessionHostId={sessionInfo.groupId?.host}
                         setRoomTabs={setRoomTabs}
                     />
                 </TabPanel>
