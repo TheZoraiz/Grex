@@ -13,6 +13,8 @@ import {
 import {
     ContentCopy as ContentCopyIcon,
     Send as SendIcon,
+    VideoCall as VideoCallIcon,
+    SettingsInputAntenna as SettingsInputAntennaIcon,
 } from '@mui/icons-material';
 import PropTypes from 'prop-types';
 import { makeStyles } from '@mui/styles';
@@ -85,7 +87,7 @@ const GroupScreen = (props) => {
     const dispatch = useDispatch()
 
     const { userData } = useSelector(state => state.global)
-    const { socket: groupSocket, sessionInfo: reduxSessionInfo } = useSelector(state => state.session)
+    const { socket: groupSocket } = useSelector(state => state.session)
 
     const [message, setMessage] = useState('')
     const [ongoingSession, setOngoingSession] = useState(null)
@@ -125,7 +127,12 @@ const GroupScreen = (props) => {
     }
 
     const handleStartSession = () => {
-        groupSocket.emit('start-group-session', props.group._id, (newSession) => setOngoingSession(newSession))
+        groupSocket.emit('start-group-session', props.group._id, (newSession) => {
+            setOngoingSession(newSession)
+            dispatch(setSessionInfo(newSession))
+            dispatch(setSocket(null))
+            navigate('/conference')
+        })
     }
 
     const handleJoinSession = () => {
@@ -204,6 +211,7 @@ const GroupScreen = (props) => {
                             className='normal-case'
                             variant='contained'
                             onClick={handleJoinSession}
+                            startIcon={<SettingsInputAntennaIcon />}
                         >
                             Join Session
                         </Button>
@@ -213,6 +221,7 @@ const GroupScreen = (props) => {
                             className='normal-case'
                             variant='contained'
                             onClick={handleStartSession}
+                            startIcon={<VideoCallIcon />}
                         >
                             Start Session
                         </Button>
@@ -271,13 +280,7 @@ const GroupScreen = (props) => {
 
             {/* Submitted Forms */}
             <TabPanel value={tabValue} index={1}>
-                <Button
-                    variant='contained'
-                    className='normal-case'
-                    onClick={() => navigate('/credentials')}
-                >
-                    Navigate to Demo
-                </Button>
+                
             </TabPanel>
         </div>
     )

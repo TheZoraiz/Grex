@@ -149,7 +149,7 @@ const Login = () => {
                     </Button>
                 </div>
             </div>
-            <div className={clsx('m-2 w-full md:w-6/12 flex justify-center items-center', classes.loginImage)}>
+            <div className={clsx('m-2 w-full md:w-6/12 hidden md:flex justify-center items-center', classes.loginImage)}>
                 <img src={grex_login_image} className='h-full m-2' />
             </div>
         </div>

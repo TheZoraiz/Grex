@@ -139,7 +139,7 @@ io.on('connection', async (socket) => {
     
     socket.on('start-group-session', async (groupId, callback) => {
         const newSession = new Session({
-            groupId: groupId,
+            groupId,
             status: 'ongoing',
         })
         await newSession.save()
@@ -683,7 +683,7 @@ io.on('connection', async (socket) => {
         let groupId = session.groupId.toString()
 
         groupSessions[groupId] = await Session.find({ groupId }).populate('groupId').exec()
-        io.to(groupId).emit('new-session-data', groupSessions[groupId])
+        socket.to(groupId).emit('new-session-data', groupSessions[groupId])
     })
 
     socket.on('disconnect', () => {

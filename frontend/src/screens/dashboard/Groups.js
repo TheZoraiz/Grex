@@ -11,6 +11,7 @@ import { useDispatch, useSelector } from 'react-redux'
 import { toast } from 'react-toastify';
 import { useNavigate } from 'react-router-dom'
 
+import { setSocket } from '../slices/sessionSlice'
 import { getUserGroups, nullifyRequestData } from '../slices/groupSlice'
 
 import GroupScreen from './GroupScreen';
@@ -53,11 +54,14 @@ const Groups = () => {
     const navigate = useNavigate();
     const dispatch = useDispatch()
 
+    const { socket: groupSocket } = useSelector(state => state.session)
     const { userGroups, fetchError } = useSelector(state => state.groups)
 
     const [tabValue, setTabValue] = useState(0);
 
     const handleTabChange = (event, newValue) => {
+        groupSocket.disconnect()
+        dispatch(setSocket(null))
         setTabValue(newValue);
     };
 
