@@ -663,27 +663,35 @@ io.on('connection', async (socket) => {
     })
 
     socket.on('end-session', async(room, callback) => {
-        socket.to(room).emit('session-ended')
 
-        let breakoutRooms = getBreakoutRoomsArray(room)
+        try {
+            socket.to(room).emit('session-ended')
             
-        if(breakoutRooms.length > 0) {
-            breakoutRooms.forEach(breakoutRoom => {
-                io.to(breakoutRoom.id).emit('session-ended')
-                delete transports[breakoutRoom.id]
-            })
+            let breakoutRooms = getBreakoutRoomsArray(room)
+                
+            if(breakoutRooms.length > 0) {
+                breakoutRooms.forEach(breakoutRoom => {
+                    io.to(breakoutRoom.id).emit('session-ended')
+                    delete transports[breakoutRoom.id]
+                })
+            }
+            delete transports[room]
+            callback()
+    
+            let session = await Session.findById(room).exec()
+            session.status = 'finished'
+            await session.save()
+    
+            let groupId = session.groupId.toString()
+    
+            groupSessions[groupId] = await Session.find({ groupId }).populate('groupId').exec()
+            socket.to(groupId).emit('new-session-data', groupSessions[groupId])
+
+        } catch(error) {
+            console.log(error)
+            io.to(socket.id).emit('end-session-cascading-failed', error);
         }
-        delete transports[room]
-        callback()
 
-        let session = await Session.findById(room).exec()
-        session.status = 'finished'
-        await session.save()
-
-        let groupId = session.groupId.toString()
-
-        groupSessions[groupId] = await Session.find({ groupId }).populate('groupId').exec()
-        socket.to(groupId).emit('new-session-data', groupSessions[groupId])
     })
 
     socket.on('disconnect', () => {
