@@ -72,6 +72,9 @@ const ParticipantWindow = (props) => {
     }, [props.consumers, props.selfStream, props.screenStream])
 
     useEffect(() => {
+        console.log(`${props.username} selfStream`, selfStream?.getTracks())
+        console.log(`${props.username} screenStream`, screenStream?.getTracks())
+
         if(props.cameraPaused) {
             if(selfMicAudioEl.current && selfStream) {
                 selfMicAudioEl.current.srcObject = selfStream
