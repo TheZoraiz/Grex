@@ -22,6 +22,7 @@ import {
     Videocam as VideocamIcon,
     GridView as GridViewIcon,
     CallEnd as CallEndIcon,
+    AutoAwesomeMotion as AutoAwesomeMotionIcon,
 } from '@mui/icons-material';
 import { makeStyles, styled } from '@mui/styles'
 import * as mediasoupClient from 'mediasoup-client'
@@ -346,6 +347,9 @@ const SessionScreen = (props) => {
                     if(params.participantSocketId && !tempConsumers[params.participantSocketId])
                         tempConsumers[params.participantSocketId] = {}
 
+                    if(params.userId)
+                        tempConsumers[params.participantSocketId].userId = params.userId
+
                     if(params.hasOwnProperty('cameraPaused')) {
                         tempConsumers[params.participantSocketId].cameraPaused = params.cameraPaused
                         continue
@@ -389,7 +393,8 @@ const SessionScreen = (props) => {
                             tempConsumers[params.participantSocketId] = {
                                 ...tempConsumers[params.participantSocketId],
                                 [params.producerType]: tempConsumer,
-                                username: params.participantUsername
+                                username: params.participantUsername,
+                                userId: params.participantUserId
                             }
     
                             if(i === consumerParams.length - 1)
@@ -632,13 +637,16 @@ const SessionScreen = (props) => {
 
             socket.on('already-joined', () => {
                 toast.error('You\'ve already joined this session in another tab or window')
-                closeAllStreams()
-                navigate('/dashboard')
+                endSessionSequence()
             })
 
             socket.on('session-ended', () => {
                 toast.error('The host has ended the session')
                 endSessionSequence()
+            })
+
+            socket.on('transferred-to-breakout-room', (tabIndex) => {
+                props.participantRoomChanged(tabIndex)
             })
 
             // new-participant is still left !!
@@ -749,6 +757,16 @@ const SessionScreen = (props) => {
 
                 break
         }
+    }
+
+    const handleParticipantsTransfer = () => {
+        props.handleParticipantsRoomTransfer(Object.keys(consumers).map(socketId => {
+            return {
+                socketId,
+                username: consumers[socketId].username,
+                userId: consumers[socketId].userId,
+            }
+        }))
     }
 
     const handleEndSession = () => {
@@ -943,6 +961,17 @@ const SessionScreen = (props) => {
                             />
                         </div>
                     </Popover>
+
+                    {userData.id === props.sessionHostId && (
+                        <IconButton
+                            color='primary'
+                            title='Transfer participants to breakout room'
+                            className={clsx('mx-1', classes.controlIcon)}
+                            onClick={handleParticipantsTransfer}
+                        >
+                            <AutoAwesomeMotionIcon htmlColor='#3C3C3C' />
+                        </IconButton>
+                    )}
 
                     <IconButton
                         color='primary'

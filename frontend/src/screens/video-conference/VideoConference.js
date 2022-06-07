@@ -13,6 +13,13 @@ import {
     DialogTitle,
     TextField,
     Button,
+    List,
+    ListItem,
+    ListItemButton,
+    ListItemText,
+    ListItemAvatar,
+    Checkbox,
+    Avatar,
 } from '@mui/material';
 import {
     AddCircle as AddCircleIcon
@@ -20,6 +27,7 @@ import {
 import { useSelector, useDispatch } from 'react-redux'
 import { v4 as uuidv4 } from 'uuid'
 import { setSocket } from '../slices/sessionSlice'
+import { toast } from 'react-toastify'
 
 import SessionScreen from './SessionScreen'
 
@@ -65,7 +73,11 @@ function VideoConference() {
     const [tabValue, setTabValue] = useState(0)
 
     const [breakoutRoomNameDialogOpen, setBreakoutRoomNameDialogOpen] = useState(false)
+    const [breakoutRoomChoiceDialogOpen, setBreakoutRoomChoiceDialogOpen] = useState(false)
+    const [participantsRoomTransfer, setParticipantsRoomTransfer] = useState(false)
     const [tempRoomName, setTempRoomName] = useState('')
+    const [tempParticipants, setTempParticipants] = useState(null)
+    const [chosenParticipants, setChosenParticipants] = useState([])
     const [roomTabs, setRoomTabs] = useState([{
         id: sessionInfo._id,
         name: 'Main Room',
@@ -74,13 +86,13 @@ function VideoConference() {
 
     const handleChange = (event, newValue) => {
         socket.disconnect()
-        setTabValue(newValue);
+        setTabValue(newValue)
     }
 
     const handleBreakoutRoomNameSubmittion = () => {
         for(let i = 0; i < roomTabs.length; i++) {
             if(tempRoomName === roomTabs[i].name) {
-                alert(`${tempRoomName} already exists`)
+                toast.info(`${tempRoomName} already exists`)
                 return
             }
         }
@@ -99,6 +111,44 @@ function VideoConference() {
         setBreakoutRoomNameDialogOpen(false)
     }
 
+    const handleParticipantsRoomTransfer = (participants) => {
+        setTempParticipants(participants)
+        setParticipantsRoomTransfer(true)
+    }
+
+    const handleParticipantsRoomTransferDialogClosure = () => {
+        setTempParticipants(null)
+        setChosenParticipants([])
+        setParticipantsRoomTransfer(false)
+    }
+
+    const handleBreakoutRoomChoiceDialogClosure = () => {
+        setBreakoutRoomChoiceDialogOpen(false)
+    }
+
+    const handleTransferClick = () => {
+        setBreakoutRoomChoiceDialogOpen(true)
+    }
+    
+    const handleTransferBreakoutRoomClick = async(roomTab) => {
+        let tabIndex = 0
+
+        roomTabs.forEach((tempTab, index) => {
+            if(tempTab.id === roomTab.id)
+                tabIndex = index
+        })
+
+        await socket.emit('participant-breakout-room-transfer', { tabIndex, chosenParticipants })
+        handleBreakoutRoomChoiceDialogClosure()
+        handleParticipantsRoomTransferDialogClosure()
+    }
+
+    const participantRoomChanged = (tabIndex) => {
+        socket.disconnect()
+        setTabValue(tabIndex)
+        toast.info('The host has transfered you to a new room')
+    }
+
     return (
         <div>
             <Tabs
@@ -109,6 +159,7 @@ function VideoConference() {
             >
                 {roomTabs.map((roomTab, index) => (
                     <Tab
+                        disabled={sessionInfo.groupId?.host !== userData.id}
                         label={
                             <Badge color="secondary" badgeContent={roomTab.participants} max={99}>
                                 {roomTab.name}
@@ -121,6 +172,7 @@ function VideoConference() {
                     <IconButton
                         color='primary'
                         title='Add breakout room'
+                        disabled={sessionInfo.groupId?.host !== userData.id}
                         onClick={() => setBreakoutRoomNameDialogOpen(true)}
                     >
                         <AddCircleIcon color='primary' />
@@ -130,15 +182,18 @@ function VideoConference() {
             {roomTabs.map((roomTab, index) => (
                 <TabPanel value={tabValue} index={index}>
                     <SessionScreen
-                        // IMPORTANT: Needs to be changed to roomTab.id with system development later
                         joinRoom={roomTab.id}
                         username={userData.name}
                         sessionId={sessionInfo._id}
                         sessionHostId={sessionInfo.groupId?.host}
                         setRoomTabs={setRoomTabs}
+                        participantRoomChanged={participantRoomChanged}
+                        handleParticipantsRoomTransfer={handleParticipantsRoomTransfer}
                     />
                 </TabPanel>
             ))}
+
+            {/* New breakout room dialog */}
             <Dialog open={breakoutRoomNameDialogOpen} onClose={() => setBreakoutRoomNameDialogOpen(false)}>
                 <DialogTitle>Enter breakout room name</DialogTitle>
                 <DialogContent>
@@ -154,6 +209,86 @@ function VideoConference() {
                 <DialogActions>
                     <Button onClick={handleBreakoutRoomNameSubmittion}>
                         Create
+                    </Button>
+                </DialogActions>
+            </Dialog>
+
+            {/* Move to breakout room dialog */}
+            <Dialog open={participantsRoomTransfer} onClose={handleParticipantsRoomTransferDialogClosure}>
+                <DialogTitle>Select participants to transfer to breakout rooms</DialogTitle>
+                <DialogContent>
+                    {tempParticipants?.length === 0 && (
+                        <Typography variant='body1'>
+                            No other participants present...
+                        </Typography>
+                    )}
+                    <List dense>
+                        {tempParticipants?.map((participant) => (
+                            <ListItem
+                                key={participant.userId}
+                                disablePadding
+                                selected={chosenParticipants.filter(tempParticipant => tempParticipant.userId === participant.userId).length > 0}
+                                secondaryAction={
+                                    <Checkbox
+                                        edge='end'
+                                        onChange={(event, checked) => setChosenParticipants(currChosenParticipants => {
+                                            if(checked)
+                                                currChosenParticipants.push(participant)
+                                            else {
+                                                currChosenParticipants = currChosenParticipants.filter(chosenPart => chosenPart.userId !== participant.userId)
+                                            }
+                                            return currChosenParticipants
+                                        })}
+                                    />
+                                }
+                            >
+                                <ListItemButton>
+                                    <ListItemAvatar>
+                                        <Avatar src={participant.profilePic} />
+                                    </ListItemAvatar>
+
+                                    <ListItemText
+                                        id={participant.userId}
+                                        primary={participant.username}
+                                    />
+                                </ListItemButton>
+                            </ListItem>
+                        ))}
+                    </List>
+                </DialogContent>
+                <DialogActions>
+                    <Button onClick={handleParticipantsRoomTransferDialogClosure}>
+                        Cancel
+                    </Button>
+                    <Button
+                        variant='contained'
+                        disabled={tempParticipants?.length === 0 && chosenParticipants.length > 0}
+                        onClick={handleTransferClick}
+                    >
+                        Transfer
+                    </Button>
+                </DialogActions>
+            </Dialog>
+
+            {/* See all breakout rooms */}
+            <Dialog open={breakoutRoomChoiceDialogOpen} onClose={() => setBreakoutRoomChoiceDialogOpen(false)}>
+                <DialogTitle>Choose breakout room</DialogTitle>
+                <DialogContent>
+                    <List dense>
+                        {roomTabs
+                            .filter((_, index) => index !== tabValue)
+                            .map(roomTab => (
+                                <ListItem disablePadding>
+                                    <ListItemButton onClick={() => handleTransferBreakoutRoomClick(roomTab)}>
+                                        <ListItemText primary={roomTab.name} />
+                                    </ListItemButton>
+                                </ListItem>
+                        ))}
+                    </List>
+                </DialogContent>
+                <DialogActions>
+                    <Button onClick={handleBreakoutRoomChoiceDialogClosure}>
+                        Cancel
                     </Button>
                 </DialogActions>
             </Dialog>

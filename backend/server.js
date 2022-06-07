@@ -231,7 +231,7 @@ io.on('connection', async (socket) => {
     })
 
     socket.on('transport-connect', async ({ dtlsParameters, consumerTransportId, isConsumer, room }) => {
-        console.log(`${socket.id}'s ${isConsumer ? 'consumer' : 'producer'} transport is connecing`)
+        console.log(`${socket.id}'s ${isConsumer ? 'consumer' : 'producer'} transport is connecting`)
         
         try {
             if(isConsumer) {
@@ -300,7 +300,7 @@ io.on('connection', async (socket) => {
             }
 
             tempProducer.on('transportclose', () => {
-                console.log('Transport for', socket.id, 'has closed')
+                console.log('Producer for', socket.id, 'has closed')
                 tempProducer.close()
             })
 
@@ -319,17 +319,18 @@ io.on('connection', async (socket) => {
 
                 // Tell newly joined participant about breakout rooms if they exist
                 if(breakoutRoomsArray.length > 0) {
-                    // Update participant numbers
-                    transports[room]['breakoutRooms'] = breakoutRoomsArray.map(breakoutRoom => {
+                    let newBreakoutRooms = breakoutRoomsArray.map(breakoutRoom => {
                         return {
                             ...breakoutRoom,
                             participants: Object.keys(transports[breakoutRoom.id]['participants']).length
                         }
                     })
+                    // Update participant numbers
+                    transports[newBreakoutRooms[0].id]['breakoutRooms'] = newBreakoutRooms
 
                     // Tell each room of new participant numbers and rooms
                     breakoutRoomsArray.forEach(breakoutRoom => {
-                        io.to(breakoutRoom.id).emit('existing-breakout-rooms', transports[room]['breakoutRooms'])
+                        io.to(breakoutRoom.id).emit('existing-breakout-rooms', newBreakoutRooms)
                     })
                 }
         
@@ -468,6 +469,7 @@ io.on('connection', async (socket) => {
 
             let consumerParams = []
             let participantUsername = ''
+            let participantUserId = transports[room]['participants'][participantSocketId]?.userId
 
             if(sharingMode === 'projection')
                 participantUsername = transports[room]['projection']['username']
@@ -542,6 +544,7 @@ io.on('connection', async (socket) => {
                         producerType,
                         participantSocketId,
                         participantUsername,
+                        participantUserId,
                     })
     
                 } else {
@@ -614,36 +617,43 @@ io.on('connection', async (socket) => {
     })
 
     socket.on('camera-toggle', ({ room, paused, resumed }) => {
-        if(paused) {
-            socket.to(room).emit('participant-camera-stopped', socket.id)
-            transports[room]['participants'][socket.id]['cameraPaused'] = true
-        }
+        try {
+            if(paused) {
+                socket.to(room).emit('participant-camera-stopped', socket.id)
+                transports[room]['participants'][socket.id]['cameraPaused'] = true
+            }
+    
+            if(resumed) {
+                socket.to(room).emit('participant-camera-resumed', socket.id)
+                transports[room]['participants'][socket.id]['cameraPaused'] = false
+            }
 
-        if(resumed) {
-            socket.to(room).emit('participant-camera-resumed', socket.id)
-            transports[room]['participants'][socket.id]['cameraPaused'] = false
+        } catch(error) {
+            console.log(error)
         }
     })
 
     socket.on('mic-toggle', ({ room, paused, resumed }) => {
-        if(paused) {
-            socket.to(room).emit('participant-mic-stopped', socket.id)
-            transports[room]['participants'][socket.id]['micPaused'] = true
-        }
+        try {
+            if(paused) {
+                socket.to(room).emit('participant-mic-stopped', socket.id)
+                transports[room]['participants'][socket.id]['micPaused'] = true
+            }
 
-        if(resumed) {
-            socket.to(room).emit('participant-mic-resumed', socket.id)
-            transports[room]['participants'][socket.id]['micPaused'] = false
+            if(resumed) {
+                socket.to(room).emit('participant-mic-resumed', socket.id)
+                transports[room]['participants'][socket.id]['micPaused'] = false
+            }
+
+        } catch(error) {
+            console.log(error)
         }
     })
 
-    // Written so that rooms don't have a uuid. Need to change when video conferencing
-    // will be integrated into the system
     socket.on('breakout-room-created', roomTabs => {
         let hostRoom = null
 
         roomTabs.forEach(roomTab => {
-            // IMPORTANT: Needs to be changed to roomTab.id with system development later
             if(roomTab.name === 'Main Room') {
                 transports[roomTab.id]['breakoutRooms'] = roomTabs
                 hostRoom = roomTab
@@ -660,6 +670,17 @@ io.on('connection', async (socket) => {
                     hostRoom
                 }
         })
+    })
+
+    socket.on('participant-breakout-room-transfer', ({ tabIndex, chosenParticipants }) => {
+        try {
+            chosenParticipants.forEach(participant => {
+                io.to(participant.socketId).emit('transferred-to-breakout-room', tabIndex)
+            })
+
+        } catch(error) {
+            console.log(error)
+        }
     })
 
     socket.on('end-session', async(room, callback) => {
@@ -700,6 +721,7 @@ io.on('connection', async (socket) => {
         Object.keys(transports).forEach(room => {
             delete transports[room]['participants'][socket.id]
 
+            // If left participant was projecting to a room
             if(transports[room]['projection'] && transports[room]['projection']['userSocketId'] === socket.id) {
                 let projectingUsername = transports[room]['projection']['username']
                 delete transports[room]['projection']
@@ -716,16 +738,19 @@ io.on('connection', async (socket) => {
             
             // Update breakout rooms' participants number info
             if(breakoutRooms.length > 0) {
-                transports[room]['breakoutRooms'] = breakoutRooms.map(breakoutRoom => {
+                let newBreakoutRooms =  breakoutRooms.map(breakoutRoom => {
                     return {
                         ...breakoutRoom,
                         participants: Object.keys(transports[breakoutRoom.id]['participants']).length
                     }
                 })
 
+                // Change breakoutRooms property of parent room
+                transports[newBreakoutRooms[0].id]['breakoutRooms'] = newBreakoutRooms
+
                 // Tell each room of new participant numbers and rooms
                 breakoutRooms.forEach(breakoutRoom => {
-                    io.to(breakoutRoom.id).emit('existing-breakout-rooms', transports[room]['breakoutRooms'])
+                    io.to(breakoutRoom.id).emit('existing-breakout-rooms', newBreakoutRooms)
                 })
             }
         })
