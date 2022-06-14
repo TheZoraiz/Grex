@@ -169,7 +169,6 @@ io.on('connection', async (socket) => {
 
     socket.on('create-or-join', async ({ room, userId }) => {
 
-        let isCreator
 
         if(transports[room]?.participants) {
             let roomUserIds = Object.values(transports[room]['participants']).map(participant => participant.userId)
@@ -178,6 +177,8 @@ io.on('connection', async (socket) => {
                 return
             }
         }
+
+        let settings
 
         // if room exists
         if (routers[room]) {
@@ -202,10 +203,14 @@ io.on('connection', async (socket) => {
         })
     })
 
-    socket.on('web-rtc-transport', async ({ room, username, userId }, callback) => {
+    socket.on('web-rtc-transport', async ({ room, username, userId, isHost, hostControls }, callback) => {
 
-        if(!transports[room])
-            transports[room] = { participants: {} }
+        if(!transports[room]) {
+            if(isHost)
+                transports[room] = { participants: {}, hostControls }
+            else
+                transports[room] = { participants: {} }
+        }
 
         transports[room]['participants'] = {
             ...transports[room]['participants'],
@@ -586,6 +591,22 @@ io.on('connection', async (socket) => {
                 projectionExists: false,
                 projectingUser: null,
             })
+    })
+
+    socket.on('host-controls-changed', ({ room, hostControls }) => {
+        try {
+            transports[room].hostControls = hostControls
+
+            let roomSockets = Object.keys(transports[room]['participants'])
+            roomSockets = roomSockets.filter(socketId => socketId !== socket.id)
+
+            roomSockets.forEach(socketId => {
+                io.to(socketId).emit('new-host-controls', hostControls)
+            })
+
+        } catch(error) {
+            console.log(error)
+        }
     })
 
     socket.on('stopped-screenshare', ({ room }) => {

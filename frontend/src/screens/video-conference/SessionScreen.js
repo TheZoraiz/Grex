@@ -13,6 +13,11 @@ import {
     Alert,
     Popover,
     Slider,
+    Dialog,
+    DialogActions,
+    DialogContent,
+    DialogTitle,
+    Checkbox,
 } from '@mui/material'
 import { tooltipClasses } from '@mui/material/Tooltip'
 import {
@@ -23,6 +28,7 @@ import {
     GridView as GridViewIcon,
     CallEnd as CallEndIcon,
     AutoAwesomeMotion as AutoAwesomeMotionIcon,
+    Settings as SettingsIcon,
 } from '@mui/icons-material';
 import { makeStyles, styled } from '@mui/styles'
 import * as mediasoupClient from 'mediasoup-client'
@@ -185,6 +191,17 @@ const SessionScreen = (props) => {
     const [projectionAudioConsumer, setProjectionAudioConsumer] = useState(null)
 
     const [sessionLog, setSessionLog] = useState([])
+
+    const [hostControls, setHostControls] = useState({
+        participantScreenSharingAllowed: true,
+        participantProjectingAllowed: true,
+    })
+    
+    const [hostControlsDialogOpen, setHostControlsDialogOpen] = useState(false)
+    const [hostStopScreenShare, setHostStopScreenShare] = useState(false)
+    const [hostStopScreenProjection, setHostStopScreenProjection] = useState(false)
+
+    const [reRender, setReRender] = useState(false)
 
 	const projectionVidEl = useRef(null);
 
@@ -414,7 +431,13 @@ const SessionScreen = (props) => {
             await device.load({ routerRtpCapabilities })
             console.log('Device created', device)
 
-            socket.emit('web-rtc-transport', { room: joinRoom, username, userId: userData.id }, async({ params }) => {
+            socket.emit('web-rtc-transport', {
+                room: joinRoom,
+                username,
+                userId: userData.id,
+                isHost: props.sessionHostId === userData.id,
+                hostControls,
+            }, async({ params }) => {
                 // Callback fires when we get transport parameters on the server-side after it's created
                 if(params.error) {
                     setError(params.error)
@@ -625,6 +648,22 @@ const SessionScreen = (props) => {
                 props.setRoomTabs(existingBreakoutRooms)
             })
 
+            socket.on('new-host-controls', newHostControls => {
+                toast.info(
+                    'Host control changed. '+
+                    `${newHostControls.participantScreenSharingAllowed ? 'Screen sharing is allowed. ' : 'Screen sharing is forbidden. '}`+
+                    `${newHostControls.participantProjectingAllowed ? 'Screen projection is allowed. ' : 'Screen projection is forbidden. '}`
+                )
+                
+                if(!newHostControls.participantScreenSharingAllowed)
+                    setHostStopScreenShare(true)
+                
+                if(!newHostControls.participantProjectingAllowed)
+                    setHostStopScreenProjection(true)
+                
+                setHostControls(newHostControls)
+            })
+
             socket.on('projection-stopped', (projectingUsername) => {
                 setLocalProjectionStream(null)
                 setProjectionVideoProducer(null)
@@ -707,8 +746,7 @@ const SessionScreen = (props) => {
         })
     }
 
-    // Works for projection as well
-    const stopSharingScreen = () => {
+    const stopAllSharedScreens = () => {
         if(window.confirm('Stop sharing screen?')) {
             if(localScreenShareStream) {
                 localScreenShareStream.getTracks().forEach(track => track.stop())
@@ -725,6 +763,25 @@ const SessionScreen = (props) => {
             }
         }
     }
+
+    useEffect(() => {
+        if(hostStopScreenShare && localScreenShareStream) {
+            localScreenShareStream.getTracks().forEach(track => track.stop())
+
+            setLocalScreenShareStream(null)
+            socket.emit('stopped-screenshare', { room: joinRoom })
+            setHostStopScreenShare(false)
+        }
+
+        if(hostStopScreenProjection && localProjectionStream) {
+            localProjectionStream.getTracks().forEach(track => track.stop())
+
+            setLocalProjectionStream(null)
+            socket.emit('stopped-projecting', { room: joinRoom })
+            setHostStopScreenProjection(false)
+        }
+
+    }, [hostStopScreenShare, hostStopScreenProjection])
 
     const toggleSelfStream = (type) => {
         let relevantTrack
@@ -767,6 +824,18 @@ const SessionScreen = (props) => {
                 userId: consumers[socketId].userId,
             }
         }))
+    }
+
+    const handleHostControlsOpen = () => {
+        setHostControlsDialogOpen(true)
+    }
+
+    const handleHostControlsSubmit = () => {
+        socket.emit('host-controls-changed', {
+            room: joinRoom,
+            hostControls,
+        })
+        setHostControlsDialogOpen(false)
     }
 
     const handleEndSession = () => {
@@ -891,7 +960,7 @@ const SessionScreen = (props) => {
                         color='primary'
                         title='Share or project a screen'
                         className={clsx('mx-1', (localScreenShareStream || localProjectionStream) ? classes.controlIconStop : classes.controlIcon)}
-                        onClick={(event) => (localScreenShareStream || localProjectionStream) ? stopSharingScreen() : setAnchorEl(event.currentTarget)}
+                        onClick={(event) => (localScreenShareStream || localProjectionStream) ? stopAllSharedScreens() : setAnchorEl(event.currentTarget)}
                     >
                         <ScreenShareIcon htmlColor='#3C3C3C' />
                     </IconButton>
@@ -900,16 +969,32 @@ const SessionScreen = (props) => {
                         open={Boolean(anchorEl)}
                         onClose={() => setAnchorEl(null)}
                     >
-                        <CustomTooltip arrow enterDelay={1000} placement='right' title='Share screen only inside your user component'>
-                            <MenuItem onClick={() => screenShareClick()}>
+                        <CustomTooltip
+                            arrow
+                            enterDelay={1000}
+                            placement='right'
+                            title='Share screen only inside your user component'
+                        >
+                            <MenuItem
+                                disabled={props.sessionHostId !== userData.id && !hostControls.participantScreenSharingAllowed}
+                                onClick={() => screenShareClick()}
+                            >
                                 <ListItemIcon>
                                     <ScreenShareIcon fontSize='small'/>
                                 </ListItemIcon>
                                 Share Screen
                             </MenuItem>
                         </CustomTooltip>
-                        <CustomTooltip arrow enterDelay={1000} placement='right' title='Project screen to the whole session'>
-                            <MenuItem onClick={() => projectShareClick()}>
+                        <CustomTooltip
+                            arrow
+                            enterDelay={1000}
+                            placement='right'
+                            title='Project screen to the whole session'
+                        >
+                            <MenuItem
+                                disabled={props.sessionHostId !== userData.id && !hostControls.participantProjectingAllowed}
+                                onClick={() => projectShareClick()}
+                            >
                                 <ListItemIcon>
                                     <ProjectScreenIcon fontSize='small'/>
                                 </ListItemIcon>
@@ -963,14 +1048,24 @@ const SessionScreen = (props) => {
                     </Popover>
 
                     {userData.id === props.sessionHostId && (
-                        <IconButton
-                            color='primary'
-                            title='Transfer participants to breakout room'
-                            className={clsx('mx-1', classes.controlIcon)}
-                            onClick={handleParticipantsTransfer}
-                        >
-                            <AutoAwesomeMotionIcon htmlColor='#3C3C3C' />
-                        </IconButton>
+                        <>
+                            <IconButton
+                                color='primary'
+                                title='Transfer participants to breakout room'
+                                className={clsx('mx-1', classes.controlIcon)}
+                                onClick={handleParticipantsTransfer}
+                            >
+                                <AutoAwesomeMotionIcon htmlColor='#3C3C3C' />
+                            </IconButton>
+                            <IconButton
+                                color='primary'
+                                title='Open host controls'
+                                className={clsx('mx-1', classes.controlIcon)}
+                                onClick={handleHostControlsOpen}
+                            >
+                                <SettingsIcon htmlColor='#3C3C3C' />
+                            </IconButton>
+                        </>
                     )}
 
                     <IconButton
@@ -995,6 +1090,62 @@ const SessionScreen = (props) => {
                     { snackbarInfo.message }
                 </Alert>
             </Snackbar>
+
+            {/* Host controls */}
+            <Dialog open={hostControlsDialogOpen} onClose={() => setHostControlsDialogOpen(false)}>
+                <DialogTitle>Host Controls</DialogTitle>
+                <DialogContent>
+                    <Grid container>
+                        <Grid item xs={6} className='my-2 flex items-center'>
+                            <Typography variant='body1'>
+                                Participant screen sharing allowed:
+                            </Typography>
+                        </Grid>
+                        <Grid item xs={6} className='my-2 flex items-center'> 
+                            <Checkbox
+                                checked={hostControls.participantScreenSharingAllowed}
+                                onChange={(event, checked) => setHostControls(currHostControls => {
+                                    if(checked)
+                                        currHostControls.participantScreenSharingAllowed = true
+                                    else 
+                                        currHostControls.participantScreenSharingAllowed = false
+                                    
+                                    setReRender(!reRender)
+                                    return currHostControls
+                                })}
+                            />
+                        </Grid>
+
+                        <Grid item xs={6} className='my-2 flex items-center'>
+                            <Typography variant='body1'>
+                                Participant screen projection allowed:
+                            </Typography>
+                        </Grid>
+                        <Grid item xs={6} className='my-2 flex items-center'> 
+                            <Checkbox
+                                checked={hostControls.participantProjectingAllowed}
+                                onChange={(event, checked) => setHostControls(currHostControls => {
+                                    if(checked)
+                                        currHostControls.participantProjectingAllowed = true
+                                    else 
+                                        currHostControls.participantProjectingAllowed = false
+
+                                    setReRender(!reRender)
+                                    return currHostControls
+                                })}
+                            />
+                        </Grid>
+                    </Grid>
+                </DialogContent>
+                <DialogActions>
+                    <Button onClick={() => setHostControlsDialogOpen(false)}>
+                        Cancel
+                    </Button>
+                    <Button variant='contained' onClick={handleHostControlsSubmit}>
+                        Submit
+                    </Button>
+                </DialogActions>
+            </Dialog>
         </div>
     )
 }
