@@ -27,6 +27,7 @@ import clsx from 'clsx';
 import GroupMessage from './GroupMessage';
 
 import { setSocket, setSessionInfo } from '../slices/sessionSlice'
+import GroupForms from './GroupForms';
 
 const useStyles = makeStyles(theme => ({
     copyToClipboard: {
@@ -195,13 +196,8 @@ const GroupScreen = (props) => {
                     />
                     <Tab
                         className='normal-case'
-                        label='Submitted Forms'
+                        label='Forms'
                         {...a11yProps(1)}
-                    />
-                    <Tab
-                        className='normal-case'
-                        label='Files'
-                        {...a11yProps(2)}
                     />
                 </Tabs>
 
@@ -280,7 +276,7 @@ const GroupScreen = (props) => {
 
             {/* Submitted Forms */}
             <TabPanel value={tabValue} index={1}>
-                
+                <GroupForms />
             </TabPanel>
         </div>
     )

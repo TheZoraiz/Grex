@@ -1,11 +1,11 @@
 import './App.css'
 import { useEffect, useState } from 'react'
-import Credentials from './screens/credentials/Credentials'
-import VideoConference from './screens/video-conference/VideoConference'
-import Login from './screens/login-and-registration/Login'
-import Register from './screens/login-and-registration/Register'
-import ForgotPassword from './screens/login-and-registration/ForgotPassword'
-import Dashboard from './screens/dashboard/Dashboard'
+import Credentials from './components/credentials/Credentials'
+import VideoConference from './components/video-conference/VideoConference'
+import Login from './components/login-and-registration/Login'
+import Register from './components/login-and-registration/Register'
+import ForgotPassword from './components/login-and-registration/ForgotPassword'
+import Dashboard from './components/dashboard/Dashboard'
 import {
 	BrowserRouter,
 	Routes,
@@ -18,7 +18,7 @@ import {
 	CircularProgress,
 } from '@mui/material'
 import { useDispatch, useSelector } from 'react-redux'
-import { verifyToken } from './screens/globalSlice'
+import { verifyToken } from './components/globalSlice'
 import { ToastContainer } from 'react-toastify'
 import 'react-toastify/dist/ReactToastify.css'
 

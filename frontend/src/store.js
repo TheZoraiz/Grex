@@ -1,9 +1,9 @@
 import { configureStore } from '@reduxjs/toolkit'
-import userReducer from './screens/slices/userSlice'
-import sessionReducer from './screens/slices/sessionSlice'
-import credentialsReducer from './screens/slices/credentialsSlice'
-import groupReducer from './screens/slices/groupSlice'
-import globalReducer from './screens/globalSlice'
+import userReducer from './components/slices/userSlice'
+import sessionReducer from './components/slices/sessionSlice'
+import credentialsReducer from './components/slices/credentialsSlice'
+import groupReducer from './components/slices/groupSlice'
+import globalReducer from './components/globalSlice'
 
 export default configureStore({
     reducer: {
