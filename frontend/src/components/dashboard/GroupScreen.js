@@ -145,7 +145,8 @@ const GroupScreen = (props) => {
     useEffect(() => {
         if(groupMessages?.length > 0) {
             let messagesContainer = document.getElementById('messages-container');
-            messagesContainer.scrollTop = messagesContainer?.scrollHeight;
+            if(messagesContainer.scrollTop)
+                messagesContainer.scrollTop = messagesContainer?.scrollHeight;
         }
     }, [groupMessages])
 
