@@ -13,6 +13,7 @@ const util = require('./util')
 const User = require('../db_schemas/User')
 const EmailVerification = require('../db_schemas/EmailVerification')
 const Group = require('../db_schemas/Group')
+const GroupForm = require('../db_schemas/GroupForm')
 
 let transporter = nodemailer.createTransport({
     service: 'gmail',
@@ -241,6 +242,35 @@ router.get('/get-user-groups', async(req, res) => {
         ]).populate(['host', 'members']).exec()
         
         res.send(userGroups)
+
+    } catch (error) {
+        console.log(error)
+        res.status(500).send(error)
+    }    
+})
+
+router.post('/create-group-form', async(req, res) => {
+    let reqBody = req.body
+
+    try {
+        await GroupForm.create({
+            groupId: mongoose.Types.ObjectId(reqBody.groupId),
+            formTitle: reqBody.formData.formTitle,
+            formQuestions: JSON.stringify(reqBody.formData.formQuestions),
+        })
+
+        res.send('Created group form successfully')
+
+    } catch (error) {
+        console.log(error)
+        res.status(500).send(error)
+    }
+})
+
+router.get('/get-group-forms', async(req, res) => {
+    try {        
+        let groupForms = await GroupForm.find({ groupId: req.query.groupId }).populate('groupId').exec()
+        res.send(groupForms)
 
     } catch (error) {
         console.log(error)

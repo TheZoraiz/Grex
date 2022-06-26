@@ -3,6 +3,7 @@ import userReducer from './components/slices/userSlice'
 import sessionReducer from './components/slices/sessionSlice'
 import credentialsReducer from './components/slices/credentialsSlice'
 import groupReducer from './components/slices/groupSlice'
+import formsReducer from './components/slices/formsSlice'
 import globalReducer from './components/globalSlice'
 
 export default configureStore({
@@ -11,6 +12,7 @@ export default configureStore({
         session: sessionReducer,
         credentials: credentialsReducer,
         groups: groupReducer,
+        forms: formsReducer,
         global: globalReducer,
     },
 })

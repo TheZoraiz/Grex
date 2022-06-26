@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import {
     Button,
     Dialog,
@@ -6,15 +6,33 @@ import {
 import {
     Add as AddIcon,
 } from '@mui/icons-material'
+import { createGroupForm, getGroupForms } from '../slices/formsSlice'
+import { useSelector, useDispatch } from 'react-redux'
 
 import FormBuilder from '../shared-components/FormBuilder'
 
 const GroupForms = (props) => {
+    const dispatch = useDispatch()
+
     const [newFormDialogOpen, setNewFormDialogOpen] = useState(false)
+
+    const { groupForms } = useSelector(state => state.forms)
 
     const handleDialogsClosure = () => {
         setNewFormDialogOpen(false)
     }
+
+    const handleNewFormSubmit = (newForm) => {
+        handleDialogsClosure()
+        dispatch(createGroupForm({
+            groupId: props.group._id,
+            formData: newForm,
+        }))
+    }
+
+    useEffect(() => {
+        dispatch(getGroupForms(props.group._id))
+    }, [])
 
     return (
         <>
@@ -35,10 +53,13 @@ const GroupForms = (props) => {
                     onClose={handleDialogsClosure}
                 >
                     <FormBuilder
+                        handleSubmit={handleNewFormSubmit}
                         handleClose={handleDialogsClosure}
                     />
                 </Dialog>
             </div>
+
+            {groupForms?.map(groupForm => groupForm.formTitle)}
         </>
     )
 }

@@ -277,7 +277,9 @@ const GroupScreen = (props) => {
 
             {/* Submitted Forms */}
             <TabPanel value={tabValue} index={1}>
-                <GroupForms />
+                <GroupForms
+                    group={props.group}
+                />
             </TabPanel>
         </div>
     )
