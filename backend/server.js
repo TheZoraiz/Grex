@@ -35,6 +35,7 @@ let io = new Server(httpServer, {
 
 const GroupMessage = require('./db_schemas/GroupMessage')
 const Session = require('./db_schemas/Session')
+const GroupForm = require('./db_schemas/GroupForm')
 
 config.connectDb()
 mongoose.connection.once('error', () => {
@@ -169,7 +170,6 @@ io.on('connection', async (socket) => {
 
     socket.on('create-or-join', async ({ room, userId }) => {
 
-
         if(transports[room]?.participants) {
             let roomUserIds = Object.values(transports[room]['participants']).map(participant => participant.userId)
             if(roomUserIds.indexOf(userId) !== -1) {
@@ -196,7 +196,7 @@ io.on('connection', async (socket) => {
         socket.join(room)
 
         console.log(socket.id, 'joined room', room)
-
+        
         io.to(socket.id).emit('rtp-capabilities', {
             rtpCapabilities: routers[room].rtpCapabilities,
             isCreator
@@ -211,6 +211,14 @@ io.on('connection', async (socket) => {
             else
                 transports[room] = { participants: {} }
         }
+        
+        if(isHost && !transports[room]['hostControls'])
+            transports[room]['hostControls'] = hostControls
+        
+        if(!isHost && transports[room]['hostControls']?.liveForm)
+            io.to(socket.id).emit('new-live-form', transports[room]['hostControls'].liveForm)
+        else if(isHost && transports[room]['hostControls']?.liveForm)
+            io.to(socket.id).emit('your-live-form-is-active', transports[room]['hostControls'].liveForm)
 
         transports[room]['participants'] = {
             ...transports[room]['participants'],
@@ -701,6 +709,30 @@ io.on('connection', async (socket) => {
 
         } catch(error) {
             console.log(error)
+        }
+    })
+
+    socket.on('get-live-forms', async({ groupId }, callback) => {
+        callback(await GroupForm.find({ groupId }).exec())
+    })
+
+    socket.on('issue-live-form', ({ room, form }, callback) => {
+        transports[room]['hostControls'].liveForm = form
+        socket.to(room).emit('new-live-form', form)
+        callback()
+    })
+
+    socket.on('end-live-form', ({ room }, callback) => {
+
+        try {
+            let tempForm = transports[room]['hostControls'].liveForm
+            delete transports[room]['hostControls'].liveForm
+            socket.to(room).emit('live-form-ended', tempForm)
+            callback()
+
+        } catch(error) {
+            console.log(error)
+            io.to(socket.id).emit('error', error);
         }
     })
 

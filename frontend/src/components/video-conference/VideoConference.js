@@ -22,14 +22,28 @@ import {
     Avatar,
 } from '@mui/material';
 import {
-    AddCircle as AddCircleIcon
+    AddCircle as AddCircleIcon, KeyboardReturn
 } from '@mui/icons-material';
 import { useSelector, useDispatch } from 'react-redux'
 import { v4 as uuidv4 } from 'uuid'
 import { setSocket } from '../slices/sessionSlice'
 import { toast } from 'react-toastify'
+import { makeStyles } from '@mui/styles';
+import clsx from 'clsx';
 
 import SessionScreen from './SessionScreen'
+
+const useStyles = makeStyles(theme => ({
+    formBar: {
+        '&:hover': {
+            backgroundColor: theme.palette.background.dark,
+        }
+    },
+    selectedFormBar: {
+        backgroundColor: theme.palette.background.darker,
+    }
+}))
+
 
 function TabPanel(props) {
     const { children, value, index, ...other } = props;
@@ -66,12 +80,15 @@ function a11yProps(index) {
 
 
 function VideoConference() {
+    const classes = useStyles()
     const dispatch = useDispatch()
+
     const { socket, sessionInfo } = useSelector(state => state.session)
     const { userData } = useSelector(state => state.global)
 
     const [tabValue, setTabValue] = useState(0)
 
+    const [groupFormsDialogOpen, setGroupFormsDialogOpen] = useState(false)
     const [breakoutRoomNameDialogOpen, setBreakoutRoomNameDialogOpen] = useState(false)
     const [breakoutRoomChoiceDialogOpen, setBreakoutRoomChoiceDialogOpen] = useState(false)
     const [participantsRoomTransfer, setParticipantsRoomTransfer] = useState(false)
@@ -83,6 +100,9 @@ function VideoConference() {
         name: 'Main Room',
         participants: 0,
     }])
+    const [groupForms, setGroupForms] = useState([])
+    const [selectedGroupForm, setSelectedGroupForm] = useState(null)
+    const [assignedFormHostSide, setAssignedFormHostSide] = useState(null)
 
     const handleChange = (event, newValue) => {
         socket.disconnect()
@@ -126,6 +146,10 @@ function VideoConference() {
         setBreakoutRoomChoiceDialogOpen(false)
     }
 
+    const handleGroupFormsDialogClosure = () => {
+        setGroupFormsDialogOpen(false)
+    }
+
     const handleTransferClick = () => {
         setBreakoutRoomChoiceDialogOpen(true)
     }
@@ -149,6 +173,19 @@ function VideoConference() {
         toast.info('The host has transfered you to a new room')
     }
 
+    const handleGroupForms = (groupForms) => {
+        setGroupForms(groupForms)
+        setGroupFormsDialogOpen(true)
+    }
+
+    const handleSubmitFormClick = async() => {
+        await socket.emit('issue-live-form', { room: roomTabs[tabValue].id, form: selectedGroupForm  }, () => {
+            setGroupFormsDialogOpen(false)
+            setAssignedFormHostSide(selectedGroupForm)
+            setSelectedGroupForm(null)
+        })
+    }
+
     return (
         <div>
             <Tabs
@@ -161,7 +198,7 @@ function VideoConference() {
                     <Tab
                         disabled={sessionInfo.groupId?.host !== userData.id}
                         label={
-                            <Badge color="secondary" badgeContent={roomTab.participants} max={99}>
+                            <Badge color='secondary' badgeContent={roomTab.participants} max={99}>
                                 {roomTab.name}
                             </Badge>
                         }
@@ -184,11 +221,15 @@ function VideoConference() {
                     <SessionScreen
                         joinRoom={roomTab.id}
                         username={userData.name}
+                        groupId={sessionInfo.groupId}
                         sessionId={sessionInfo._id}
                         sessionHostId={sessionInfo.groupId?.host}
                         setRoomTabs={setRoomTabs}
                         participantRoomChanged={participantRoomChanged}
                         handleParticipantsRoomTransfer={handleParticipantsRoomTransfer}
+                        handleGroupForms={handleGroupForms}
+                        assignedFormHostSide={assignedFormHostSide}
+                        setAssignedFormHostSide={setAssignedFormHostSide}
                     />
                 </TabPanel>
             ))}
@@ -289,6 +330,39 @@ function VideoConference() {
                 <DialogActions>
                     <Button onClick={handleBreakoutRoomChoiceDialogClosure}>
                         Cancel
+                    </Button>
+                </DialogActions>
+            </Dialog>
+
+            {/* Group forms */}
+            <Dialog
+                fullWidth
+                maxWidth='sm'
+                open={groupFormsDialogOpen} onClose={() => setBreakoutRoomChoiceDialogOpen(false)}
+            >
+                <DialogTitle>Choose form to assign</DialogTitle>
+                <DialogContent>
+                    {groupForms.map(groupForm => (
+                        <Typography
+                            variant='body1'
+                            className={clsx('p-2 flex justify-between items-center cursor-pointer rounded-lg', (selectedGroupForm?._id === groupForm._id ? classes.selectedFormBar : classes.formBar))}
+                            onClick={() => setSelectedGroupForm(groupForm)}
+                        >
+                            {groupForm.formTitle}
+                        </Typography>
+                    ))}
+                </DialogContent>
+                <DialogActions>
+                    <Button className='font-bold normal-case' onClick={handleGroupFormsDialogClosure}>
+                        Cancel
+                    </Button>
+                    <Button
+                        variant='contained'
+                        className='font-bold normal-case'
+                        disabled={!Boolean(selectedGroupForm)}
+                        onClick={handleSubmitFormClick}
+                    >
+                        Submit
                     </Button>
                 </DialogActions>
             </Dialog>

@@ -278,5 +278,37 @@ router.get('/get-group-forms', async(req, res) => {
     }    
 })
 
+router.post('/edit-group-form', async(req, res) => {
+    let reqBody = req.body
+
+    try {        
+        await GroupForm.updateOne(
+            { _id: reqBody.formId },
+            {
+                formTitle: reqBody.formData.formTitle,
+                formQuestions: JSON.stringify(reqBody.formData.formQuestions)
+            }
+        )
+
+        res.send('Edited group form successfully')
+
+    } catch (error) {
+        console.log(error)
+        res.status(500).send(error)
+    }    
+})
+
+router.post('/delete-group-form', async(req, res) => {
+    let reqBody = req.body
+
+    try {        
+        await GroupForm.deleteOne({ _id: reqBody.formId })
+        res.send('Form deletes successfully')
+
+    } catch (error) {
+        console.log(error)
+        res.status(500).send(error)
+    }    
+})
 
 module.exports = router

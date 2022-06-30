@@ -18,6 +18,8 @@ import {
     DialogContent,
     DialogTitle,
     Checkbox,
+    CircularProgress,
+    Badge,
 } from '@mui/material'
 import { tooltipClasses } from '@mui/material/Tooltip'
 import {
@@ -29,6 +31,7 @@ import {
     CallEnd as CallEndIcon,
     AutoAwesomeMotion as AutoAwesomeMotionIcon,
     Settings as SettingsIcon,
+    Quiz as QuizIcon,
 } from '@mui/icons-material';
 import { makeStyles, styled } from '@mui/styles'
 import * as mediasoupClient from 'mediasoup-client'
@@ -40,7 +43,9 @@ import clsx from 'clsx'
 import ParticipantWindow from './ParticipantWindow'
 import { setSocket } from '../slices/sessionSlice'
 import { toast } from 'react-toastify';
-import { nullifyAuthError } from '../globalSlice';
+import { nullifyAuthError, nullifyLogoutData } from '../globalSlice';
+
+import FormSolver from '../shared-components/FormSolver';
 
 const videoConstraints = {
     video: {
@@ -200,6 +205,10 @@ const SessionScreen = (props) => {
     const [hostControlsDialogOpen, setHostControlsDialogOpen] = useState(false)
     const [hostStopScreenShare, setHostStopScreenShare] = useState(false)
     const [hostStopScreenProjection, setHostStopScreenProjection] = useState(false)
+
+    const [assignedLiveForm, setAssignedLiveForm] = useState(null)
+    const [issueLiveFormLoading, setIssueLiveFormLoading] = useState(false)
+    const [formSolverDialogOpen, setFormSolverDialogOpen] = useState(false)
 
     const [reRender, setReRender] = useState(false)
 
@@ -688,6 +697,20 @@ const SessionScreen = (props) => {
                 props.participantRoomChanged(tabIndex)
             })
 
+            socket.on('new-live-form', (form) => {
+                setAssignedLiveForm(form)
+                toast.info(form.formTitle + ' was just assigned to this session')
+            })
+
+            socket.on('live-form-ended', (form) => {
+                setAssignedLiveForm(null)
+                toast.info(form.formTitle + ' has just been finished')
+            })
+
+            socket.on('your-live-form-is-active', (form) => {
+                props.setAssignedFormHostSide(form)
+            })
+            
             // new-participant is still left !!
     
             let stream = await navigator.mediaDevices.getUserMedia(videoConstraints)
@@ -836,6 +859,19 @@ const SessionScreen = (props) => {
             hostControls,
         })
         setHostControlsDialogOpen(false)
+    }
+
+    const handleIssueLiveForm = () => {
+        setIssueLiveFormLoading(true)
+        socket.emit('get-live-forms', { groupId: props.groupId }, groupForms => {
+            setIssueLiveFormLoading(false)
+            props.handleGroupForms(groupForms)
+        })
+    }
+
+    const handleEndLiveForm = () => {
+        if(window.confirm('Are you sure you want to end live form?'))
+            socket.emit('end-live-form', { room: joinRoom }, () => props.setAssignedFormHostSide(null))
     }
 
     const handleEndSession = () => {
@@ -1067,6 +1103,37 @@ const SessionScreen = (props) => {
                             </IconButton>
                         </>
                     )}
+                    <IconButton
+                        color='primary'
+                        className={clsx('mx-1', (props.assignedFormHostSide ? classes.controlIconStop : classes.controlIcon))}
+                        title={
+                            userData.id === props.sessionHostId
+                            ? (props.assignedFormHostSide ? 'End live form' : 'Issue live form')
+                            : 'See assigned forms'
+                        }
+                        onClick={
+                            userData.id === props.sessionHostId
+                            ? props.assignedFormHostSide ? handleEndLiveForm : handleIssueLiveForm
+                            : () => {
+                                if(assignedLiveForm)
+                                    setFormSolverDialogOpen(true)
+                                else
+                                    toast.error('The host has not assigned any form')
+                            }
+                        }
+                    >
+                        {issueLiveFormLoading ? (
+                            <CircularProgress size={23} sx={{ color: '#3C3C3C' }} />
+                        ) : (
+                            assignedLiveForm ? (
+                                <Badge color='secondary' badgeContent='!'>
+                                    <QuizIcon htmlColor='#3C3C3C' />
+                                </Badge>
+                            ) : (
+                                <QuizIcon htmlColor='#3C3C3C' />
+                            )
+                        )}
+                    </IconButton>
 
                     <IconButton
                         color='primary'
@@ -1145,6 +1212,20 @@ const SessionScreen = (props) => {
                         Submit
                     </Button>
                 </DialogActions>
+            </Dialog>
+
+            {/* To solve forms */}
+            <Dialog
+                fullWidth
+                maxWidth='md'
+                open={formSolverDialogOpen}
+                onClose={() => setFormSolverDialogOpen(false)}
+            >
+                <FormSolver
+                    form={assignedLiveForm}
+                    handleSubmit={(submissionForm) => console.log(submissionForm)}
+                    handleClose={() => setFormSolverDialogOpen(false)}
+                />
             </Dialog>
         </div>
     )

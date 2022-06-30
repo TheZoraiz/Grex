@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import {
     DialogTitle,
     DialogContent,
@@ -230,11 +230,18 @@ const FormBuilder = (props) => {
         })
     }
 
+    useEffect(() => {
+        if(props.form) {
+            setFormTitle(props.form.formTitle)
+            setFormQuestions(JSON.parse(props.form.formQuestions))
+        }
+    }, [])
+
     return (
         <>
             <DialogTitle>
-                <Typography variant='h4'>
-                    Create new form
+                <Typography variant='h4' className='font-bold'>
+                    {props.form ? 'Edit form' : 'Create new form'}
                 </Typography>
 
                 <TextField
