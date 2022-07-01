@@ -442,8 +442,7 @@ const SessionScreen = (props) => {
 
             socket.emit('web-rtc-transport', {
                 room: joinRoom,
-                username,
-                userId: userData.id,
+                user: userData,
                 isHost: props.sessionHostId === userData.id,
                 hostControls,
             }, async({ params }) => {
@@ -697,18 +696,25 @@ const SessionScreen = (props) => {
                 props.participantRoomChanged(tabIndex)
             })
 
-            socket.on('new-live-form', (form) => {
+            socket.on('new-live-form', ({ form, formsStatus }) => {
                 setAssignedLiveForm(form)
+                props.setFormsStatus(formsStatus)
                 toast.info(form.formTitle + ' was just assigned to this session')
             })
 
             socket.on('live-form-ended', (form) => {
                 setAssignedLiveForm(null)
+                props.setFormsStatus(null)
                 toast.info(form.formTitle + ' has just been finished')
             })
 
-            socket.on('your-live-form-is-active', (form) => {
+            socket.on('your-live-form-is-active', ({ form, formsStatus }) => {
                 props.setAssignedFormHostSide(form)
+                props.setFormsStatus(formsStatus)
+            })
+
+            socket.on('form-status-update', (formsStatus) => {
+                props.setFormsStatus(formsStatus)
             })
             
             // new-participant is still left !!
@@ -731,7 +737,7 @@ const SessionScreen = (props) => {
             // In case participant changed to breakout room and sharingMode is different
             sharingMode = 'self'
 
-            socket.emit('create-or-join', { room: joinRoom, userId: userData.id})
+            socket.emit('create-or-join', { room: joinRoom, user: userData})
         }
 
         return () => {
@@ -871,7 +877,25 @@ const SessionScreen = (props) => {
 
     const handleEndLiveForm = () => {
         if(window.confirm('Are you sure you want to end live form?'))
-            socket.emit('end-live-form', { room: joinRoom }, () => props.setAssignedFormHostSide(null))
+            socket.emit('end-live-form', { room: joinRoom }, () => {
+                props.setAssignedFormHostSide(null)
+                props.setFormsStatus(null)
+            })
+    }
+
+    const handleLiveFormSubmit = async(submissionForm) => {
+        await socket.emit('submit-form', { room: joinRoom, user: userData, submissionForm })
+        setFormSolverDialogOpen(false)
+    }
+
+    const isFormSubmitted = () => {
+        let tempFormsStatus = props.formsStatus ? props.formsStatus : []
+
+        for(let i = 0; i < tempFormsStatus.length; i++) {
+            if(tempFormsStatus[i].user.id === userData.id)
+                return true
+        }
+        return false
     }
 
     const handleEndSession = () => {
@@ -1109,12 +1133,16 @@ const SessionScreen = (props) => {
                         title={
                             userData.id === props.sessionHostId
                             ? (props.assignedFormHostSide ? 'End live form' : 'Issue live form')
-                            : 'See assigned forms'
+                            : 'See assigned form`'
                         }
                         onClick={
                             userData.id === props.sessionHostId
                             ? props.assignedFormHostSide ? handleEndLiveForm : handleIssueLiveForm
                             : () => {
+                                if(isFormSubmitted()) {
+                                    toast.info('You\'ve already submitted this form')
+                                    return
+                                }
                                 if(assignedLiveForm)
                                     setFormSolverDialogOpen(true)
                                 else
@@ -1223,7 +1251,7 @@ const SessionScreen = (props) => {
             >
                 <FormSolver
                     form={assignedLiveForm}
-                    handleSubmit={(submissionForm) => console.log(submissionForm)}
+                    handleSubmit={handleLiveFormSubmit}
                     handleClose={() => setFormSolverDialogOpen(false)}
                 />
             </Dialog>

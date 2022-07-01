@@ -52,7 +52,7 @@ const FormSolver = (props) => {
     const handleSubmit = () => {
         props.handleSubmit({
             formId: props.form._id,
-            submissionForm,
+            submissionForm: JSON.stringify(submissionForm),
         })
     }
 

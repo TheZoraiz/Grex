@@ -20,9 +20,12 @@ import {
     ListItemAvatar,
     Checkbox,
     Avatar,
+    Chip,
+    Tooltip,
 } from '@mui/material';
 import {
-    AddCircle as AddCircleIcon, KeyboardReturn
+    AddCircle as AddCircleIcon,
+    Adjust as AdjustIcon,
 } from '@mui/icons-material';
 import { useSelector, useDispatch } from 'react-redux'
 import { v4 as uuidv4 } from 'uuid'
@@ -78,7 +81,6 @@ function a11yProps(index) {
     };
 }
 
-
 function VideoConference() {
     const classes = useStyles()
     const dispatch = useDispatch()
@@ -103,6 +105,7 @@ function VideoConference() {
     const [groupForms, setGroupForms] = useState([])
     const [selectedGroupForm, setSelectedGroupForm] = useState(null)
     const [assignedFormHostSide, setAssignedFormHostSide] = useState(null)
+    const [formsStatus, setFormsStatus] = useState(null)
 
     const handleChange = (event, newValue) => {
         socket.disconnect()
@@ -183,39 +186,56 @@ function VideoConference() {
             setGroupFormsDialogOpen(false)
             setAssignedFormHostSide(selectedGroupForm)
             setSelectedGroupForm(null)
+            setFormsStatus([])
         })
     }
 
+    const getFormStatusLabel = () => formsStatus?.length > 0 ? formsStatus?.length+' form submissions' : 'No form submissions yet...'
+
     return (
         <div>
-            <Tabs
-                value={tabValue}
-                onChange={handleChange}
-                centered
-                style={{ height: '5vh' }}
-            >
-                {roomTabs.map((roomTab, index) => (
-                    <Tab
-                        disabled={sessionInfo.groupId?.host !== userData.id}
-                        label={
-                            <Badge color='secondary' badgeContent={roomTab.participants} max={99}>
-                                {roomTab.name}
-                            </Badge>
-                        }
-                        {...a11yProps(index)}
-                    />
-                ))}
-                <div className='flex justify-center items-center'>
-                    <IconButton
-                        color='primary'
-                        title='Add breakout room'
-                        disabled={sessionInfo.groupId?.host !== userData.id}
-                        onClick={() => setBreakoutRoomNameDialogOpen(true)}
-                    >
-                        <AddCircleIcon color='primary' />
-                    </IconButton>
-                </div>
-            </Tabs>
+            <div className={'flex items-center '+(formsStatus ? 'justify-between' : 'justify-center')}>
+                {formsStatus && (<div className='w-1/12'/>)}
+
+                <Tabs
+                    value={tabValue}
+                    onChange={handleChange}
+                    centered
+                    style={{ height: '5vh' }}
+                >
+                    {roomTabs.map((roomTab, index) => (
+                        <Tab
+                            disabled={sessionInfo.groupId?.host !== userData.id}
+                            label={
+                                <Badge color='secondary' badgeContent={roomTab.participants} max={99}>
+                                    {roomTab.name}
+                                </Badge>
+                            }
+                            {...a11yProps(index)}
+                        />
+                    ))}
+                    <div className='flex justify-center items-center'>
+                        <IconButton
+                            color='primary'
+                            title='Add breakout room'
+                            disabled={sessionInfo.groupId?.host !== userData.id}
+                            onClick={() => setBreakoutRoomNameDialogOpen(true)}
+                        >
+                            <AddCircleIcon color='primary' />
+                        </IconButton>
+                    </div>
+                </Tabs>
+
+                {formsStatus && (
+                    <Tooltip arrow title="Number of participant form submissions">
+                        <Chip
+                            icon={<AdjustIcon />}
+                            label={getFormStatusLabel()}
+                            color='error'
+                        />
+                    </Tooltip>
+                )}
+            </div>
             {roomTabs.map((roomTab, index) => (
                 <TabPanel value={tabValue} index={index}>
                     <SessionScreen
@@ -230,6 +250,8 @@ function VideoConference() {
                         handleGroupForms={handleGroupForms}
                         assignedFormHostSide={assignedFormHostSide}
                         setAssignedFormHostSide={setAssignedFormHostSide}
+                        formsStatus={formsStatus}
+                        setFormsStatus={setFormsStatus}
                     />
                 </TabPanel>
             ))}

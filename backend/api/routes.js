@@ -14,6 +14,7 @@ const User = require('../db_schemas/User')
 const EmailVerification = require('../db_schemas/EmailVerification')
 const Group = require('../db_schemas/Group')
 const GroupForm = require('../db_schemas/GroupForm')
+const SubmittedForm = require('../db_schemas/SubmittedForm')
 
 let transporter = nodemailer.createTransport({
     service: 'gmail',
@@ -310,5 +311,17 @@ router.post('/delete-group-form', async(req, res) => {
         res.status(500).send(error)
     }    
 })
+
+router.get('/get-forms-submissions', async(req, res) => {
+    try {
+        let submittedForms = await SubmittedForm.find({ formId: req.query.formId }).populate(['formId', 'userId']).exec()
+        res.send(submittedForms)
+
+    } catch (error) {
+        console.log(error)
+        res.status(500).send(error)
+    }    
+})
+
 
 module.exports = router

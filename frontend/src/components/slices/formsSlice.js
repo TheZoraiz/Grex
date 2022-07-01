@@ -53,11 +53,24 @@ export const deleteGroupForm = createAsyncThunk(
     }
 )
 
+export const getFormSubmissions = createAsyncThunk(
+    'forms/getFormSubmissions',
+    async (data, { rejectWithValue }) => {
+        try {
+            let response = await axios.get(`${process.env.REACT_APP_BACKEND_URI}/api/get-forms-submissions?formId=${data}`, { withCredentials: true })
+            return response.data
+        } catch (error) {
+            return rejectWithValue(error.response.data);
+        }
+    }
+)
+
 export const formsSlice = createSlice({
     name: 'forms',
     initialState: {
         groupForms: null,
         formRefresh: false,
+        tempFormSubmissions: null,
     },
     reducers: {
         formRefreshed: (state, action) => {
@@ -116,6 +129,15 @@ export const formsSlice = createSlice({
                 'delete-group-form',
                 { render: action.payload, type: 'error', isLoading: false, autoClose: 5000, draggable: true, closeOnClick: true }
             )
+        },
+
+
+        [getFormSubmissions.fulfilled]: (state, action) => {
+            state.tempFormSubmissions = action.payload
+        },
+        [getFormSubmissions.rejected]: (state, action) => {
+            state.tempFormSubmissions = null
+            toast.error(action.payload)
         },
     }
 })

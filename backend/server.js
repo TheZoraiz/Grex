@@ -36,6 +36,7 @@ let io = new Server(httpServer, {
 const GroupMessage = require('./db_schemas/GroupMessage')
 const Session = require('./db_schemas/Session')
 const GroupForm = require('./db_schemas/GroupForm')
+const SubmittedForm = require('./db_schemas/SubmittedForm')
 
 config.connectDb()
 mongoose.connection.once('error', () => {
@@ -168,11 +169,11 @@ io.on('connection', async (socket) => {
     // ___________________________________________
     // Media streaming socket endpoints henceforth
 
-    socket.on('create-or-join', async ({ room, userId }) => {
+    socket.on('create-or-join', async ({ room, user }) => {
 
         if(transports[room]?.participants) {
-            let roomUserIds = Object.values(transports[room]['participants']).map(participant => participant.userId)
-            if(roomUserIds.indexOf(userId) !== -1) {
+            let roomUserIds = Object.values(transports[room]['participants']).map(participant => participant.user.id)
+            if(roomUserIds.indexOf(user.id) !== -1) {
                 io.to(socket.id).emit('already-joined')
                 return
             }
@@ -203,7 +204,7 @@ io.on('connection', async (socket) => {
         })
     })
 
-    socket.on('web-rtc-transport', async ({ room, username, userId, isHost, hostControls }, callback) => {
+    socket.on('web-rtc-transport', async ({ room, user, isHost, hostControls }, callback) => {
 
         if(!transports[room]) {
             if(isHost)
@@ -216,15 +217,22 @@ io.on('connection', async (socket) => {
             transports[room]['hostControls'] = hostControls
         
         if(!isHost && transports[room]['hostControls']?.liveForm)
-            io.to(socket.id).emit('new-live-form', transports[room]['hostControls'].liveForm)
+            io.to(socket.id).emit('new-live-form', {
+                form: transports[room]['hostControls'].liveForm,
+                formsStatus: transports[room]['hostControls'].submittedForms,
+            })
+
         else if(isHost && transports[room]['hostControls']?.liveForm)
-            io.to(socket.id).emit('your-live-form-is-active', transports[room]['hostControls'].liveForm)
+            io.to(socket.id).emit('your-live-form-is-active', {
+                form: transports[room]['hostControls'].liveForm,
+                formsStatus: transports[room]['hostControls'].submittedForms,
+            })
 
         transports[room]['participants'] = {
             ...transports[room]['participants'],
             [socket.id]: {
-                username,
-                userId,
+                username: user.name,
+                user,
                 producerTransport: await createWebRtcTransport(room, socket.id, callback),
                 consumerTransport: await createWebRtcTransport(room, socket.id, undefined),
             }
@@ -718,7 +726,8 @@ io.on('connection', async (socket) => {
 
     socket.on('issue-live-form', ({ room, form }, callback) => {
         transports[room]['hostControls'].liveForm = form
-        socket.to(room).emit('new-live-form', form)
+        transports[room]['hostControls'].submittedForms = []
+        socket.to(room).emit('new-live-form', { form, formsStatus: [] })
         callback()
     })
 
@@ -727,8 +736,29 @@ io.on('connection', async (socket) => {
         try {
             let tempForm = transports[room]['hostControls'].liveForm
             delete transports[room]['hostControls'].liveForm
+            delete transports[room]['hostControls'].submittedForms
+
             socket.to(room).emit('live-form-ended', tempForm)
             callback()
+
+        } catch(error) {
+            console.log(error)
+            io.to(socket.id).emit('error', error);
+        }
+    })
+
+    socket.on('submit-form', async({ room, user, submissionForm }) => {
+        try {
+            const newSubmittedForm = new SubmittedForm({
+                formId: submissionForm.formId,
+                userId: user.id,
+                submittedData: submissionForm.submissionForm
+            })
+            transports[room]['hostControls'].submittedForms?.push({ user, submissionForm })
+            socket.to(room).emit('form-status-update', transports[room]['hostControls'].submittedForms)
+            io.to(socket.id).emit('form-status-update', transports[room]['hostControls'].submittedForms)
+
+            await newSubmittedForm.save()
 
         } catch(error) {
             console.log(error)
@@ -742,7 +772,7 @@ io.on('connection', async (socket) => {
             socket.to(room).emit('session-ended')
             
             let breakoutRooms = getBreakoutRoomsArray(room)
-                
+            
             if(breakoutRooms.length > 0) {
                 breakoutRooms.forEach(breakoutRoom => {
                     io.to(breakoutRoom.id).emit('session-ended')

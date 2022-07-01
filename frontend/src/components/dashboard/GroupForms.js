@@ -2,20 +2,39 @@ import React, { useEffect, useState } from 'react'
 import {
     Button,
     Dialog,
+    DialogTitle,
+    DialogContent,
+    DialogActions,
     IconButton,
     Typography,
+    CircularProgress,
+    List,
+    ListItem,
+    ListItemButton,
+    ListItemText,
 } from '@mui/material'
 import {
     Add as AddIcon,
     Edit as EditIcon,
     Delete as DeleteIcon,
+    Visibility as VisibilityIcon,
 } from '@mui/icons-material'
 import { makeStyles } from '@mui/styles'
-import { createGroupForm, getGroupForms, editGroupForm, deleteGroupForm, formRefreshed } from '../slices/formsSlice'
 import { useSelector, useDispatch } from 'react-redux'
 import clsx from 'clsx'
 
+import {
+    createGroupForm,
+    getGroupForms,
+    editGroupForm,
+    deleteGroupForm,
+    formRefreshed,
+    getFormSubmissions,
+
+} from '../slices/formsSlice'
+
 import FormBuilder from '../shared-components/FormBuilder'
+import FormViewer from '../shared-components/FormViewer'
 
 const useStyles = makeStyles(theme => ({
     groupFormBar: {
@@ -30,13 +49,19 @@ const GroupForms = (props) => {
 
     const [newFormDialogOpen, setNewFormDialogOpen] = useState(false)
     const [editFormDialogOpen, setEditFormDialogOpen] = useState(false)
+    const [formSubmissionsDialogOpen, setFormSubmissionsDialogOpen] = useState(false)
+    const [submittedFormViewDialogOpen, setSubmittedFormViewDialogOpen] = useState(false)
     const [tempForm, setTempForm] = useState(false)
+    
+    const [formSubmissionsLoading, setFormSubmissionsLoading] = useState(false)
+    const [formToView, setFormToView] = useState(null)
 
-    const { groupForms, formRefresh } = useSelector(state => state.forms)
+    const { groupForms, tempFormSubmissions, formRefresh } = useSelector(state => state.forms)
 
     const handleDialogsClosure = () => {
         setNewFormDialogOpen(false)
         setEditFormDialogOpen(false)
+        setFormSubmissionsDialogOpen(false)
     }
 
     const handleNewFormSubmit = (newForm) => {
@@ -68,9 +93,23 @@ const GroupForms = (props) => {
         }
     }
 
+    const handleViewSubmissionsClick = (groupForm) => {
+        setTempForm(groupForm)
+        setFormSubmissionsLoading(true)
+        dispatch(getFormSubmissions(groupForm._id))
+    }
+
     useEffect(() => {
         dispatch(getGroupForms(props.group._id))
+        return () => handleDialogsClosure()
     }, [])
+
+    useEffect(() => {
+        setFormSubmissionsLoading(false)
+        if(tempFormSubmissions)
+            setFormSubmissionsDialogOpen(true)
+
+    }, [tempFormSubmissions])
 
     useEffect(() => {
         if(formRefresh) {
@@ -110,17 +149,25 @@ const GroupForms = (props) => {
                         {groupForm.formTitle}
                     </Typography>
 
-                    <div className='flex'>
-                        <IconButton onClick={() => handleEditFormClick(groupForm)}>
+                    <div className='flex items-center'>
+                        {(tempForm._id === groupForm._id && formSubmissionsLoading) ? (
+                            <CircularProgress size={25} />
+                        ) : (
+                            <IconButton title='View submissions' onClick={() => handleViewSubmissionsClick(groupForm)}>
+                                <VisibilityIcon />
+                            </IconButton>
+                        )}
+                        <IconButton title='Edit form' onClick={() => handleEditFormClick(groupForm)}>
                             <EditIcon />
                         </IconButton>
-                        <IconButton onClick={() => handleDeleteGroupForm(groupForm)}>
+                        <IconButton title='Delete form' onClick={() => handleDeleteGroupForm(groupForm)}>
                             <DeleteIcon />
                         </IconButton>
                     </div>
                 </div>
             ))}
 
+            {/* Build form */}
             <Dialog
                 fullWidth
                 maxWidth='md'
@@ -131,6 +178,65 @@ const GroupForms = (props) => {
                     form={tempForm}
                     handleSubmit={handleEditFormSubmit}
                     handleClose={handleDialogsClosure}
+                />
+            </Dialog>
+
+            {/* View form submissions */}
+            <Dialog
+                fullWidth
+                maxWidth='md'
+                open={formSubmissionsDialogOpen}
+                onClose={handleDialogsClosure}
+            >
+                <DialogTitle>
+                    <Typography variant='h4' className='font-bold'>
+                        {tempForm.formTitle}
+                    </Typography>
+                </DialogTitle>
+                <DialogContent>
+                    {tempFormSubmissions?.length === 0 && (
+                        <Typography>
+                            No submissions for this form yet...
+                        </Typography>
+                    )}
+                    {tempFormSubmissions?.map(submission => (
+                        <ListItem disablePadding>
+                            <ListItemButton
+                                className='flex justify-between'
+                                onClick={() => {
+                                    setSubmittedFormViewDialogOpen(true)
+                                    setFormToView(submission)
+                                }}
+                            >
+                                <Typography>
+                                    {submission.userId.name}
+                                </Typography>
+                                <Typography>
+                                    {submission.createdAt}
+                                </Typography>
+                            </ListItemButton>
+                        </ListItem>
+                    ))}
+                </DialogContent>
+                <DialogActions className='flex justify-end'>
+                    <Button
+                        className='normal-case mr-2'
+                        onClick={handleDialogsClosure}
+                    >
+                        Close
+                    </Button>
+                </DialogActions>
+            </Dialog>
+
+            <Dialog
+                fullWidth
+                maxWidth='md'
+                open={submittedFormViewDialogOpen}
+                onClose={() => setSubmittedFormViewDialogOpen(false)}
+            >
+                <FormViewer
+                    submission={formToView}
+                    handleClose={() => setSubmittedFormViewDialogOpen(false)}
                 />
             </Dialog>
         </>
