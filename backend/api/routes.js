@@ -6,6 +6,10 @@ const bcrypt = require('bcryptjs')
 const crypto = require('crypto')
 const jwt = require('jsonwebtoken')
 const nodemailer = require('nodemailer')
+const fs = require('fs')
+const multer  = require('multer')
+const upload = multer({ dest: './backend/temp_uploads' })
+const path = require('path')
 
 const util = require('./util')
 
@@ -94,8 +98,10 @@ router.post('/login', async(req, res) => {
         let jwtUserData = {
             id: userData._id,
             name: userData.name,
+            profPicPath: userData.profPicPath,
             email: userData.email,
-            emailVerifiedAt: userData.emailVerifiedAt
+            emailVerifiedAt: userData.emailVerifiedAt,
+            createdAt: userData.createdAt
         }
 
         let jwtAccessToken = jwt.sign(jwtUserData, process.env.ACCESS_TOKEN_SECRET, { expiresIn: '24h' })
@@ -316,6 +322,45 @@ router.get('/get-forms-submissions', async(req, res) => {
     try {
         let submittedForms = await SubmittedForm.find({ formId: req.query.formId }).populate(['formId', 'userId']).exec()
         res.send(submittedForms)
+
+    } catch (error) {
+        console.log(error)
+        res.status(500).send(error)
+    }    
+})
+
+router.post('/upload-prof-pic', upload.single('profPicFile'), async(req, res) => {
+    try {
+        let picUser = await User.findOne(mongoose.Types.ObjectId(req.user.id))
+        let fileData = fs.readFileSync(req.file.path)
+        let newFileName = req.file.filename + path.extname(req.file.originalname)
+
+        fs.writeFileSync(__dirname + '/../public/uploads/' + newFileName, fileData)
+        fs.unlinkSync(req.file.path)
+
+        // Delete old prof pic
+        if(fs.existsSync(__dirname + '/../public/' + picUser.profPicPath))
+            fs.unlinkSync(__dirname + '/../public/' + picUser.profPicPath)
+
+        picUser.profPicPath = 'uploads/'+newFileName
+        await picUser.save()
+        
+        let jwtUserData = {
+            id: picUser._id,
+            name: picUser.name,
+            email: picUser.email,
+            profPicPath: picUser.profPicPath,
+            emailVerifiedAt: picUser.emailVerifiedAt,
+            createdAt: picUser.createdAt
+        }
+
+        let jwtAccessToken = jwt.sign(jwtUserData, process.env.ACCESS_TOKEN_SECRET, { expiresIn: '24h' })
+    
+        res.cookie('accessToken', jwtAccessToken, { httpOnly: true, signed: true })
+        return res.send({
+            msg: 'Profile pic updated successfully',
+            jwtUserData,
+        })
 
     } catch (error) {
         console.log(error)

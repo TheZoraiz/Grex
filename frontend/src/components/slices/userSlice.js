@@ -1,5 +1,6 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit'
 import axios from 'axios'
+import { toast } from 'react-toastify'
 
 export const registerUser = createAsyncThunk(
     'users/registerUser',
@@ -37,6 +38,19 @@ export const loginUser = createAsyncThunk(
     }
 )
 
+export const uploadProfPic = createAsyncThunk(
+    'users/uploadProfPic',
+    async (data, { rejectWithValue }) => {
+        try {
+            toast.loading('Uploading profile pic...', { toastId: 'uploading-prof-pic' })
+            let response = await axios.post(`${process.env.REACT_APP_BACKEND_URI}/api/upload-prof-pic`, data, { withCredentials: true, headers: { 'Content-Type': 'multipart/form-data' } })
+            return response.data
+        } catch (error) {
+            return rejectWithValue(error.response);
+        }
+    }
+)
+
 export const userSlice = createSlice({
     name: 'user',
     initialState: {
@@ -65,6 +79,21 @@ export const userSlice = createSlice({
         },
         [loginUser.rejected]: (state, action) => {
             state.error = action.payload
+        },
+
+
+        [uploadProfPic.fulfilled]: (state, action) => {
+            state.userData = action.payload.jwtUserData
+            toast.update(
+                'uploading-prof-pic',
+                { render: action.payload.msg, type: 'success', isLoading: false, autoClose: 5000, draggable: true, closeOnClick: true }
+            )
+        },
+        [uploadProfPic.rejected]: (state, action) => {
+            toast.update(
+                'uploading-prof-pic',
+                { render: action.payload, type: 'error', isLoading: false, autoClose: 5000, draggable: true, closeOnClick: true }
+            )
         },
     },
 })

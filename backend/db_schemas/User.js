@@ -14,6 +14,7 @@ module.exports = mongoose.model('User', new Schema({
         min: 6,
         max: 255,
     },
+    profPicPath: String,
     emailVerifiedAt: Date,
     password: {
         type: String,

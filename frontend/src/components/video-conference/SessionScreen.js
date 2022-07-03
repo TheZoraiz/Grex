@@ -972,6 +972,7 @@ const SessionScreen = (props) => {
                             cameraPaused={cameraPaused}
                             micPaused={micPaused}
                             isMuted={true}
+                            participantPic={process.env.REACT_APP_BACKEND_URI + '/' + userData.profPicPath}
                         />
                     </Grid>
                     {Object.values(consumers).map(consumer => {

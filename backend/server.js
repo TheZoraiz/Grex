@@ -56,6 +56,7 @@ app.use(cors({ credentials: true, origin: true }))
 app.use(cookieParser(process.env.COOKIE_SECRET))
 app.use(express.json())
 app.use(express.static('public'))
+app.use(express.static('public/uploads'))
 app.use('/api', apiRoutes)
 app.all('*', (req, res) => {
     res.redirect('/');
@@ -126,10 +127,10 @@ io.on('connection', async (socket) => {
     // Group socket endpoints henceforth
 
     socket.on('get-group-data', async (groupId, callback) => {
-        if(!groupMessages[groupId])
+        // if(!groupMessages[groupId])
             groupMessages[groupId] = await GroupMessage.find({ groupId }).populate('userId').exec()
 
-        if(!groupSessions[groupId])
+        // if(!groupSessions[groupId])
             groupSessions[groupId] = await Session.find({ groupId }).populate('groupId').exec()
         
         socket.join(groupId)

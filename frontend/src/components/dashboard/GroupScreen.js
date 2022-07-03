@@ -240,6 +240,7 @@ const GroupScreen = (props) => {
                     {groupMessages?.map(message => (
                         <GroupMessage
                             senderName={message.userId?.name}
+                            senderPic={message.userId?.profPicPath}
                             message={message.message}
                             messageTime={message.createdAt}
                         />

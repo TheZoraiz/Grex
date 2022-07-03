@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import {
     Typography,
     IconButton,
@@ -12,6 +12,7 @@ import {
     DialogContent,
     DialogActions,
     Button,
+    Grid,
 } from '@mui/material'
 import { makeStyles } from '@mui/styles'
 import {
@@ -20,6 +21,8 @@ import {
 import { useDispatch, useSelector } from 'react-redux'
 import { toast } from 'react-toastify'
 import clsx from 'clsx'
+import dayjs from 'dayjs'
+import advancedFormat from 'dayjs/plugin/advancedFormat'
 
 import { logout, nullifyLogoutData } from '../globalSlice'
 import {
@@ -28,6 +31,9 @@ import {
     getUserGroups,
     nullifyRequestData as nullifyGroupRequestData,
 } from '../slices/groupSlice'
+import { uploadProfPic } from '../slices/userSlice'
+
+dayjs.extend(advancedFormat)
 
 const useStyles = makeStyles(theme => ({
     navbarContainer: {
@@ -35,9 +41,12 @@ const useStyles = makeStyles(theme => ({
     }
 }))
 
+
 const Navbar = () => {
     const classes = useStyles()
     const dispatch = useDispatch()
+
+    const profPicInput = useRef(null)
 
     const { userData, logoutMsg, error: logoutError } = useSelector(state => state.global)
     const { responseMsg: groupMsg, error: groupError } = useSelector(state => state.groups)
@@ -51,11 +60,13 @@ const Navbar = () => {
     const [groupCode, setGroupCode] = useState('')
     const [createGroupDialogOpen, setCreateGroupDialogOpen] = useState(false)
     const [joinGroupDialogOpen, setJoinGroupDialogOpen] = useState(false)
-
+    const [openProfileDialog, setOpenProfileDialog] = useState(false)
+    
     const handleMenuClosure = () => {
         setAnchorEl(null)
         setGroupMenuToggle(false)
         setProfileMenuToggle(false)
+        setOpenProfileDialog(false)
     }
 
     const handleProfileClick = (e) => {
@@ -107,6 +118,24 @@ const Navbar = () => {
         setGroupCode('')
     }
 
+    const handleMenuProfileClick = () => {
+        setOpenProfileDialog(true)
+    }
+
+    const handleUploadChange = (e) => {
+        e.preventDefault()
+        e.stopPropagation()
+
+		const profPicFile = e.target.files[0]
+		if (profPicFile) {
+            let formData = new FormData()
+            formData.append('profPicFile', profPicFile)
+            dispatch(uploadProfPic(formData))
+		}
+
+        e.target.value = null;
+    }
+
     useEffect(() => {
         if (logoutMsg) {
             toast.update('logout', { render: logoutMsg, type: 'success', isLoading: false, autoClose: 5000 })
@@ -149,6 +178,8 @@ const Navbar = () => {
         }
     }, [logoutMsg, logoutError, groupMsg, groupError])
 
+    console.log('userData', userData)
+
     return (
         <div className={clsx('w-full px-5 flex items-center justify-between', classes.navbarContainer)}>
             {/* Left portion */}
@@ -185,14 +216,14 @@ const Navbar = () => {
                     title='View Profile'
                     onClick={handleProfileClick}
                 >
-                    <Avatar src={userData.profilePic ? userData.profilePic : ''} />
+                    <Avatar src={process.env.REACT_APP_BACKEND_URI + '/' + userData.profPicPath} />
                 </IconButton>
                 <Menu
                     anchorEl={anchorEl}
                     open={profileMenuToggle}
                     onClose={handleMenuClosure}
                 >
-                    <MenuItem onClick={handleMenuClosure}>Profile</MenuItem>
+                    <MenuItem onClick={handleMenuProfileClick}>Profile</MenuItem>
                     <MenuItem onClick={handleLogout}>Logout</MenuItem>
                 </Menu>
             </div>
@@ -235,6 +266,89 @@ const Navbar = () => {
                 <DialogActions>
                     <Button onClick={handleJoinGroup}>
                         Join Group
+                    </Button>
+                </DialogActions>
+            </Dialog>
+
+            {/* Profile dialog */}
+            <Dialog
+                fullWidth
+                maxWidth='xs'
+                open={openProfileDialog}
+                onClose={handleMenuClosure}
+            >
+                <DialogTitle>{ userData.name }</DialogTitle>
+                <DialogContent>
+                    <input
+                        accept='image/*'
+                        className='hidden'
+                        id='button-file'
+                        type='file'
+                        ref={profPicInput}
+                        onChange={handleUploadChange}
+                    />
+                    <Tooltip arrow title='Click to change profile pic'>
+                        <Avatar
+                            className='mx-auto cursor-pointer'
+                            alt={userData.name}
+                            src={process.env.REACT_APP_BACKEND_URI + '/' + userData.profPicPath}
+                            sx={{ width: 250, height: 250 }}
+                            onClick={() => profPicInput.current.click()}
+                        />
+                    </Tooltip>
+
+                    <Grid container rowSpacing={1} className='mt-5'>
+                        <Grid item xs={6}>
+                            <Typography variant='body1' className='font-bold'>
+                                Name:
+                            </Typography>
+                        </Grid>
+                        <Grid item xs={6}>
+                            <Typography variant='body1'>
+                                {userData.name}
+                            </Typography>
+                        </Grid>
+
+
+                        <Grid item xs={6}>
+                            <Typography variant='body1' className='font-bold'>
+                                Email:
+                            </Typography>
+                        </Grid>
+                        <Grid item xs={6}>
+                            <Typography variant='body1'>
+                                {userData.email}
+                            </Typography>
+                        </Grid>
+
+
+                        <Grid item xs={6}>
+                            <Typography variant='body1' className='font-bold'>
+                                Email Verification Date:
+                            </Typography>
+                        </Grid>
+                        <Grid item xs={6}>
+                            <Typography variant='body1'>
+                                {dayjs(userData.emailVerifiedAt).format('hh:mma - Do MMM, YYYY')}
+                            </Typography>
+                        </Grid>
+
+
+                        <Grid item xs={6}>
+                            <Typography variant='body1' className='font-bold'>
+                                Account Created At:
+                            </Typography>
+                        </Grid>
+                        <Grid item xs={6}>
+                            <Typography variant='body1'>
+                                {dayjs(userData.createdAt).format('hh:mma - Do MMM, YYYY')}
+                            </Typography>
+                        </Grid>
+                    </Grid>
+                </DialogContent>
+                <DialogActions>
+                    <Button onClick={handleMenuClosure}>
+                        Close
                     </Button>
                 </DialogActions>
             </Dialog>
