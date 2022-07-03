@@ -19,6 +19,7 @@ const EmailVerification = require('../db_schemas/EmailVerification')
 const Group = require('../db_schemas/Group')
 const GroupForm = require('../db_schemas/GroupForm')
 const SubmittedForm = require('../db_schemas/SubmittedForm')
+const Session = require('../db_schemas/Session')
 
 let transporter = nodemailer.createTransport({
     service: 'gmail',
@@ -330,8 +331,9 @@ router.get('/get-forms-submissions', async(req, res) => {
 })
 
 router.post('/upload-prof-pic', upload.single('profPicFile'), async(req, res) => {
+    console.log(req.user.name)
     try {
-        let picUser = await User.findOne(mongoose.Types.ObjectId(req.user.id))
+        let picUser = await User.findById(mongoose.Types.ObjectId(req.user.id)).exec()
         let fileData = fs.readFileSync(req.file.path)
         let newFileName = req.file.filename + path.extname(req.file.originalname)
 
@@ -361,6 +363,24 @@ router.post('/upload-prof-pic', upload.single('profPicFile'), async(req, res) =>
             msg: 'Profile pic updated successfully',
             jwtUserData,
         })
+
+    } catch (error) {
+        console.log(error)
+        res.status(500).send(error)
+    }    
+})
+
+router.get('/get-dashboard-data', async(req, res) => {
+    let user = req.user
+
+    try {
+        let userGroups = await Group.find({ userId: user.id }).populate(['host', 'members']).exec()
+        let groupIds = []
+
+        userGroups.forEach(group => groupIds.push(mongoose.Types.ObjectId(group._id)))
+        let liveSessions = await Session.find({ groupId: { $in: groupIds },  status: 'ongoing' }).populate('groupId').exec()
+
+        res.send({ userGroups, liveSessions })
 
     } catch (error) {
         console.log(error)
