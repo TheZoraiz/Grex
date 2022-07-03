@@ -12,7 +12,7 @@ import { toast } from 'react-toastify';
 import { useNavigate } from 'react-router-dom'
 
 import { setSocket } from '../slices/sessionSlice'
-import { getUserGroups, nullifyRequestData } from '../slices/groupSlice'
+import { getUserGroups, nullifyRequestData, nullifyGroupRedirect } from '../slices/groupSlice'
 
 import GroupScreen from './GroupScreen';
 
@@ -55,7 +55,7 @@ const Groups = () => {
     const dispatch = useDispatch()
 
     const { socket: groupSocket } = useSelector(state => state.session)
-    const { userGroups, fetchError } = useSelector(state => state.groups)
+    const { userGroups, groupRedirect, fetchError } = useSelector(state => state.groups)
 
     const [tabValue, setTabValue] = useState(0);
 
@@ -76,6 +76,15 @@ const Groups = () => {
             return
         }
     }, [fetchError])
+
+    useEffect(() => {
+        if(userGroups && groupRedirect) {
+            userGroups?.forEach((group, index) => {
+                if(group._id === groupRedirect) setTabValue(index)
+            })
+            dispatch(nullifyGroupRedirect())
+        }
+    }, [userGroups, groupRedirect])
 
     if(!userGroups)
         return (

@@ -6,12 +6,22 @@ import {
     Box,
     Button,
     useTheme,
+    Grid,
+    ListItem,
+    ListItemButton,
+    ListItemText,
+    List,
+    ListItemIcon,
 } from '@mui/material'
+import { Circle as CircleIcon } from '@mui/icons-material'
 import { makeStyles } from '@mui/styles'
-import PropTypes from 'prop-types';
+import PropTypes from 'prop-types'
 import { useDispatch, useSelector } from 'react-redux'
 import { Navigate, useNavigate } from 'react-router-dom'
-import clsx from 'clsx';
+import clsx from 'clsx'
+
+import { getDashboardData } from '../slices/dashboardSlice'
+import { setGroupRedirect } from '../slices/groupSlice'
 
 import Groups from './Groups'
 import Navbar from '../shared-components/Navbar'
@@ -19,12 +29,24 @@ import Navbar from '../shared-components/Navbar'
 const useStyles = makeStyles(theme => ({
     bodyContainer: {
         height: '90vh',
-    }
+    },
+    cellContainer: {
+        height: '40vh',
+        padding: 10,
+        marginBottom: 10,
+    },
+    cell: {
+        padding: 10,
+        height: '100%',
+        borderRadius: 10,
+        overflowY: 'scroll',
+        backgroundColor: theme.palette.background.darker
+    },
 }))
 
 function TabPanel(props) {
     const theme = useTheme()
-    const { children, value, index, ...other } = props;
+    const { children, value, index, ...other } = props
 
     return (
         <div
@@ -41,34 +63,40 @@ function TabPanel(props) {
                 </Box>
             )}
         </div>
-    );
+    )
 }
 
 TabPanel.propTypes = {
     children: PropTypes.node,
     index: PropTypes.number.isRequired,
     value: PropTypes.number.isRequired,
-};
+}
 
 function a11yProps(index) {
     return {
         id: `vertical-tab-${index}`,
         'aria-controls': `vertical-tabpanel-${index}`,
-    };
+    }
 }
 
 const Dashboard = () => {
     const classes = useStyles()
-    const navigate = useNavigate();
-    const dispatch = useDispatch();
+    const navigate = useNavigate()
+    const dispatch = useDispatch()
 
-    const [tabValue, setTabValue] = useState(0);
+    const [tabValue, setTabValue] = useState(0)
 
     const { serverMsg, userData, error: authError } = useSelector(state => state.global)
+    const { groups, liveSessions } = useSelector(state => state.dashboard)
 
     const handleTabChange = (event, newValue) => {
-        setTabValue(newValue);
-    };
+        setTabValue(newValue)
+    }
+
+    useEffect(() => {
+        if(!authError)
+            dispatch(getDashboardData())
+    }, [])
 
     if (authError)
         return (<Navigate to='/' />)
@@ -84,20 +112,76 @@ const Dashboard = () => {
                     onChange={handleTabChange}
                     sx={{ borderRight: 1, borderColor: 'divider' }}
                 >
-                    <Tab label="Dashboard" {...a11yProps(0)} />
-                    <Tab label="Groups" {...a11yProps(1)} />
+                    <Tab label='Dashboard' {...a11yProps(0)} />
+                    <Tab label='Groups' {...a11yProps(1)} />
                 </Tabs>
                 <TabPanel value={tabValue} index={0}>
-                    Dashboard
+
+                    <Grid container>
+                        <Grid className={classes.cellContainer} item xs={12} md={6}>
+                            <div className={classes.cell}>
+                                <Typography variant='h4' className='mb-2 font-bold'>
+                                    Groups
+                                </Typography>
+                                {groups?.length === 0 && (
+                                    <Typography variant='body1'>
+                                        No groups joined...
+                                    </Typography>
+                                )}
+
+                                <List dense>
+                                    {groups?.map(group => (
+                                        <ListItem disablePadding>
+                                            <ListItemButton onClick={() => {
+                                                dispatch(setGroupRedirect(group._id))
+                                                setTabValue(1)
+                                            }}>
+                                                <ListItemText primary={group.name + (userData.id === group.host._id ? ' (Owner)' : ` (${group.host.name})`)} />
+                                            </ListItemButton>
+                                        </ListItem>
+                                    ))}
+                                </List>
+                            </div>
+                        </Grid>
+                        <Grid className={classes.cellContainer} item xs={12} md={6}>
+                            <div className={classes.cell}>
+                            </div>
+                        </Grid>
+                        <Grid className={classes.cellContainer} item xs={12}>
+                            <div className={classes.cell}>
+                                <Typography variant='h4' className='mb-2 font-bold'>
+                                    Live Sessions
+                                </Typography>
+                                {liveSessions?.length === 0 && (
+                                    <Typography variant='body1'>
+                                        No sessions being held...
+                                    </Typography>
+                                )}
+
+                                <List dense>
+                                    {liveSessions?.map(session => (
+                                        <ListItem disablePadding>
+                                            <ListItemButton onClick={() => {
+                                                dispatch(setGroupRedirect(session.groupId._id))
+                                                setTabValue(1)
+                                            }}>
+                                                <ListItemIcon>
+                                                    <CircleIcon color='error' />
+                                                </ListItemIcon>
+                                                <ListItemText primary={session.groupId.name} />
+                                            </ListItemButton>
+                                        </ListItem>
+                                    ))}
+                                </List>
+                            </div>
+                        </Grid>
+                    </Grid>
+
                 </TabPanel>
                 <TabPanel value={tabValue} index={1}>
                     <Groups />
                 </TabPanel>
             </div>
-
-            {/* <pre style={{ color: 'white' }}>
-                { JSON.stringify(userData, null, 2) }
-            </pre> */}
         </div>
     )
 }
