@@ -12,6 +12,7 @@ import {
     Divider,
     Checkbox,
 } from '@mui/material'
+import { green, red } from '@mui/material/colors'
 
 const FormViewer = (props) => {
     const [formTitle, setFormTitle] = useState('')
@@ -50,22 +51,59 @@ const FormViewer = (props) => {
                                     <FormControlLabel
                                         disabled
                                         value={option}
-                                        label={option}
                                         checked={formQuestion.chosenOption === option}
                                         control={<Radio size='small' />}
+                                        label={(
+                                            <div className='flex items-center'>
+                                                <Typography className='cursor-text' variant='body1'>
+                                                    {option}
+                                                </Typography>
+
+                                                {formQuestion.correctOption === option && (
+                                                    <Typography variant='body1' className='ml-2' color={green[400]}>
+                                                        (Correct Choice)
+                                                    </Typography>
+                                                )}
+                                                {(formQuestion.chosenOption === option && formQuestion.chosenOption !== formQuestion.correctOption) && (
+                                                    <Typography variant='body1' className='ml-2' color={red[500]}>
+                                                        (Wrong Choice)
+                                                    </Typography>
+                                                )}
+                                            </div>
+                                        )}
                                     />
                                 ))}
                             </RadioGroup>
                         )}
 
                         {formQuestion.type === 'checkbox' && formQuestion.answerOptions.map((option, i) => (
-                            <FormControlLabel
-                                disabled
-                                value={option.value}
-                                checked={option.checked}
-                                control={<Checkbox size='small' />}
-                                label={option.value}
-                            />
+                            <>
+                                <FormControlLabel
+                                    disabled
+                                    value={option.value}
+                                    checked={option.checked}
+                                    control={<Checkbox size='small' />}
+                                    label={
+                                        <div className='flex items-center'>
+                                            <Typography className='cursor-text' variant='body1'>
+                                                {option.value}
+                                            </Typography>
+
+                                            {formQuestion.options[i].checked && (
+                                                <Typography variant='body1' className='ml-2' color={green[400]}>
+                                                    (Correct Option)
+                                                </Typography>
+                                            )}
+                                            {(option.checked && formQuestion.options[i].checked !== option.checked) && (
+                                                <Typography variant='body1' className='ml-2' color={red[500]}>
+                                                    (Wrong Option)
+                                                </Typography>
+                                            )}
+                                        </div>
+                                    }
+                                />
+                                <br />
+                            </>
                         ))}
 
                         {(formQuestion.type === 'short' || formQuestion.type === 'long') && (

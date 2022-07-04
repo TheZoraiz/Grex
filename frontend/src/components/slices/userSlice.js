@@ -88,6 +88,7 @@ export const userSlice = createSlice({
                 'uploading-prof-pic',
                 { render: action.payload.msg, type: 'success', isLoading: false, autoClose: 5000, draggable: true, closeOnClick: true }
             )
+            window.location.reload()
         },
         [uploadProfPic.rejected]: (state, action) => {
             toast.update(

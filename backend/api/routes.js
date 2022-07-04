@@ -20,6 +20,7 @@ const Group = require('../db_schemas/Group')
 const GroupForm = require('../db_schemas/GroupForm')
 const SubmittedForm = require('../db_schemas/SubmittedForm')
 const Session = require('../db_schemas/Session')
+const SessionAttendance = require('../db_schemas/SessionAttendance')
 
 let transporter = nodemailer.createTransport({
     service: 'gmail',
@@ -286,6 +287,18 @@ router.get('/get-group-forms', async(req, res) => {
     }    
 })
 
+router.get('/get-group-user-forms', async(req, res) => {
+    try {        
+        let groupFormIds = await GroupForm.find({ groupId: req.query.groupId }).distinct('_id').exec()
+        let userForms = await SubmittedForm.find({ groupId: { $in: groupFormIds }, userId: req.query.userId, }).populate(['formId', 'userId']).exec()
+        res.send(userForms)
+
+    } catch (error) {
+        console.log(error)
+        res.status(500).send(error)
+    }    
+})
+
 router.post('/edit-group-form', async(req, res) => {
     let reqBody = req.body
 
@@ -310,7 +323,7 @@ router.post('/delete-group-form', async(req, res) => {
     let reqBody = req.body
 
     try {        
-        await GroupForm.deleteOne({ _id: reqBody.formId })
+        await GroupForm.deleteOne({ _id: reqBody.formId }).exec()
         res.send('Form deletes successfully')
 
     } catch (error) {
@@ -374,13 +387,35 @@ router.get('/get-dashboard-data', async(req, res) => {
     let user = req.user
 
     try {
-        let userGroups = await Group.find({ userId: user.id }).populate(['host', 'members']).exec()
+        let allUserGroups = await Group.find().or([
+            { host: mongoose.Types.ObjectId(user.id) },
+            { members: mongoose.Types.ObjectId(user.id) }
+        ]).populate(['host', 'members']).exec()
         let groupIds = []
 
-        userGroups.forEach(group => groupIds.push(mongoose.Types.ObjectId(group._id)))
+        allUserGroups.forEach(group => groupIds.push(mongoose.Types.ObjectId(group._id)))
         let liveSessions = await Session.find({ groupId: { $in: groupIds },  status: 'ongoing' }).populate('groupId').exec()
 
-        res.send({ userGroups, liveSessions })
+        let userHostGroups = await Group.find().or([
+            { host: mongoose.Types.ObjectId(user.id) },
+        ]).populate(['host', 'members']).exec()
+        groupIds = []
+
+        userHostGroups.forEach(group => groupIds.push(mongoose.Types.ObjectId(group._id)))
+        let groupForms = await GroupForm.find({ groupId: { $in: groupIds } }).populate('groupId').exec()
+
+        res.send({ allUserGroups, liveSessions, groupForms })
+
+    } catch (error) {
+        console.log(error)
+        res.status(500).send(error)
+    }    
+})
+
+router.get('/get-session-attendances', async(req, res) => {
+    try {
+        let sessionAttendances = await SessionAttendance.find({ groupId: req.query.groupId }).populate(['sessionId', 'present', 'absent']).exec()
+        res.send(sessionAttendances)
 
     } catch (error) {
         console.log(error)

@@ -22,6 +22,8 @@ import {
 import { makeStyles } from '@mui/styles'
 import { useSelector, useDispatch } from 'react-redux'
 import clsx from 'clsx'
+import dayjs from 'dayjs'
+import advancedFormat from 'dayjs/plugin/advancedFormat'
 
 import {
     createGroupForm,
@@ -30,16 +32,19 @@ import {
     deleteGroupForm,
     formRefreshed,
     getFormSubmissions,
+    getGroupUserForms,
 
 } from '../slices/formsSlice'
+import { nullifyFormRedirect } from '../slices/groupSlice'
 
 import FormBuilder from '../shared-components/FormBuilder'
 import FormViewer from '../shared-components/FormViewer'
 
+dayjs.extend(advancedFormat)
+
 const useStyles = makeStyles(theme => ({
     groupFormBar: {
         borderRadius: 5,
-        boxShadow: '0 0 3px black'
     }
 }))
 
@@ -56,7 +61,9 @@ const GroupForms = (props) => {
     const [formSubmissionsLoading, setFormSubmissionsLoading] = useState(false)
     const [formToView, setFormToView] = useState(null)
 
-    const { groupForms, tempFormSubmissions, formRefresh } = useSelector(state => state.forms)
+    const { userData } = useSelector(state => state.global)
+    const { formRedirect } = useSelector(state => state.groups)
+    const { groupForms, groupUserForms, tempFormSubmissions, formRefresh } = useSelector(state => state.forms)
 
     const handleDialogsClosure = () => {
         setNewFormDialogOpen(false)
@@ -99,8 +106,17 @@ const GroupForms = (props) => {
         dispatch(getFormSubmissions(groupForm._id))
     }
 
+    const handleUserViewSubmission = (submittedForm) => {
+        setSubmittedFormViewDialogOpen(true)
+        setFormToView(submittedForm)
+    }
+
     useEffect(() => {
-        dispatch(getGroupForms(props.group._id))
+        if(props.group.host._id === userData.id)
+            dispatch(getGroupForms(props.group._id))
+        else
+            dispatch(getGroupUserForms({ groupId: props.group._id, userId: userData.id }))
+
         return () => handleDialogsClosure()
     }, [])
 
@@ -118,54 +134,103 @@ const GroupForms = (props) => {
         }
     }, [formRefresh])
 
+    useEffect(() => {
+        if(groupForms && formRedirect) {
+            groupForms?.forEach(form => {
+                if(form._id === formRedirect) handleEditFormClick(form)
+            })
+            dispatch(nullifyFormRedirect())
+        }
+    }, [formRedirect])
+
     return (
         <>
-            <div className='h-10 flex justify-end'>
-                <Button
-                    className='mr-3 normal-case'
-                    variant='contained'
-                    startIcon={<AddIcon />}
-                    onClick={() => setNewFormDialogOpen(true)}
-                >
-                    New Form
-                </Button>
-                
-                <Dialog
-                    fullWidth
-                    maxWidth='md'
-                    open={newFormDialogOpen}
-                    onClose={handleDialogsClosure}
-                >
-                    <FormBuilder
-                        handleSubmit={handleNewFormSubmit}
-                        handleClose={handleDialogsClosure}
-                    />
-                </Dialog>
-            </div>
-
-            {groupForms?.map(groupForm => (
-                <div className={clsx('p-3 mt-2 flex items-center justify-between', classes.groupFormBar)}>
-                    <Typography>
-                        {groupForm.formTitle}
-                    </Typography>
-
-                    <div className='flex items-center'>
-                        {(tempForm._id === groupForm._id && formSubmissionsLoading) ? (
-                            <CircularProgress size={25} />
-                        ) : (
-                            <IconButton title='View submissions' onClick={() => handleViewSubmissionsClick(groupForm)}>
-                                <VisibilityIcon />
-                            </IconButton>
-                        )}
-                        <IconButton title='Edit form' onClick={() => handleEditFormClick(groupForm)}>
-                            <EditIcon />
-                        </IconButton>
-                        <IconButton title='Delete form' onClick={() => handleDeleteGroupForm(groupForm)}>
-                            <DeleteIcon />
-                        </IconButton>
+            {(props.group.host._id === userData.id) ? (
+                <>
+                    <div className='h-10 flex justify-end'>
+                        <Button
+                            className='mr-3 normal-case'
+                            variant='contained'
+                            startIcon={<AddIcon />}
+                            onClick={() => setNewFormDialogOpen(true)}
+                        >
+                            New Form
+                        </Button>
+                        
+                        <Dialog
+                            fullWidth
+                            maxWidth='md'
+                            open={newFormDialogOpen}
+                            onClose={handleDialogsClosure}
+                        >
+                            <FormBuilder
+                                handleSubmit={handleNewFormSubmit}
+                                handleClose={handleDialogsClosure}
+                            />
+                        </Dialog>
                     </div>
-                </div>
-            ))}
+                    {groupForms?.length === 0 && (
+                        <Typography variant='body1'>
+                            No group forms...
+                        </Typography>
+                    )}
+
+                    {groupForms?.map(groupForm => (
+                        <ListItem disablePadding>
+                            <ListItemButton
+                                onClick={() => handleEditFormClick(groupForm)}
+                                className={clsx('p-3 mt-2 flex items-center justify-between', classes.groupFormBar)}
+                            >
+                                <Typography>
+                                    {groupForm.formTitle}
+                                </Typography>
+
+                                <div className='flex items-center'>
+                                    {(tempForm._id === groupForm._id && formSubmissionsLoading) ? (
+                                        <CircularProgress size={25} />
+                                    ) : (
+                                        <IconButton title='View submissions' onClick={() => handleViewSubmissionsClick(groupForm)}>
+                                            <VisibilityIcon />
+                                        </IconButton>
+                                    )}
+                                    <IconButton title='Edit form' onClick={() => handleEditFormClick(groupForm)}>
+                                        <EditIcon />
+                                    </IconButton>
+                                    <IconButton title='Delete form' onClick={() => handleDeleteGroupForm(groupForm)}>
+                                        <DeleteIcon />
+                                    </IconButton>
+                                </div>
+                            </ListItemButton>
+                        </ListItem>
+                    ))}
+                </>
+
+            ) : (
+                <>
+                    {groupUserForms?.length === 0 && (
+                        <Typography variant='body1'>
+                            No forms submitted...
+                        </Typography>
+                    )}
+
+                    {groupUserForms?.map(submittedForm => (
+                        <ListItem disablePadding>
+                            <ListItemButton
+                                onClick={() => handleUserViewSubmission(submittedForm)}
+                                className={clsx('p-3 mt-2 flex items-center justify-between', classes.groupFormBar)}
+                            >
+                                <Typography>
+                                    {submittedForm.formId.formTitle} ... {dayjs(submittedForm.createdAt).format('hh:mma - Do MMM, YYYY')}
+                                </Typography>
+
+                                <IconButton title='View submission' onClick={() => handleUserViewSubmission(submittedForm)}>
+                                    <VisibilityIcon />
+                                </IconButton>
+                            </ListItemButton>
+                        </ListItem>
+                    ))}
+                </>
+            )}
 
             {/* Build form */}
             <Dialog
@@ -212,7 +277,7 @@ const GroupForms = (props) => {
                                     {submission.userId.name}
                                 </Typography>
                                 <Typography>
-                                    {submission.createdAt}
+                                    {dayjs(submission.createdAt).format('hh:mma - Do MMM, YYYY')}
                                 </Typography>
                             </ListItemButton>
                         </ListItem>

@@ -178,8 +178,6 @@ const Navbar = () => {
         }
     }, [logoutMsg, logoutError, groupMsg, groupError])
 
-    console.log('userData', userData)
-
     return (
         <div className={clsx('w-full px-5 flex items-center justify-between', classes.navbarContainer)}>
             {/* Left portion */}
@@ -277,7 +275,6 @@ const Navbar = () => {
                 open={openProfileDialog}
                 onClose={handleMenuClosure}
             >
-                <DialogTitle>{ userData.name }</DialogTitle>
                 <DialogContent>
                     <input
                         accept='image/*'

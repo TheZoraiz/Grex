@@ -19,6 +19,7 @@ export const dashboardSlice = createSlice({
     initialState: {
         groups: null,
         liveSessions: null,
+        groupForms: null,
         dashboardRefresh: false,
     },
     reducers: {
@@ -26,8 +27,9 @@ export const dashboardSlice = createSlice({
     },
     extraReducers: {
         [getDashboardData.fulfilled]: (state, action) => {
-            state.groups = action.payload.userGroups
+            state.groups = action.payload.allUserGroups
             state.liveSessions = action.payload.liveSessions
+            state.groupForms = action.payload.groupForms
         },
         [getDashboardData.rejected]: (state, action) => {
             toast.error(action.payload)

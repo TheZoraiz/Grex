@@ -5,7 +5,6 @@ import {
     Button,
     IconButton,
     Snackbar,
-    Slide,
     Menu,
     MenuItem,
     ListItemIcon,
@@ -20,6 +19,7 @@ import {
     Checkbox,
     CircularProgress,
     Badge,
+    TextField,
 } from '@mui/material'
 import { tooltipClasses } from '@mui/material/Tooltip'
 import {
@@ -32,6 +32,7 @@ import {
     AutoAwesomeMotion as AutoAwesomeMotionIcon,
     Settings as SettingsIcon,
     Quiz as QuizIcon,
+    DoneAllTwoTone as DoneAllTwoToneIcon,
 } from '@mui/icons-material';
 import { makeStyles, styled } from '@mui/styles'
 import * as mediasoupClient from 'mediasoup-client'
@@ -209,6 +210,9 @@ const SessionScreen = (props) => {
     const [assignedLiveForm, setAssignedLiveForm] = useState(null)
     const [issueLiveFormLoading, setIssueLiveFormLoading] = useState(false)
     const [formSolverDialogOpen, setFormSolverDialogOpen] = useState(false)
+    const [attendanceDialogOpen, setAttendanceDialogOpen] = useState(false)
+
+    const [attendanceTitle, setAttendanceTitle] = useState('')
 
     const [reRender, setReRender] = useState(false)
 
@@ -859,6 +863,54 @@ const SessionScreen = (props) => {
         setHostControlsDialogOpen(true)
     }
 
+    const handleMarkAttendance = () => {
+        if(attendanceTitle === '')
+            toast.error('You need an attendance title')
+        else
+            socket.emit('mark-attendance', {
+                room: joinRoom,
+                attendanceTitle,
+                groupId: props.groupId,
+                sessionId: props.sessionId,
+                confirmed: false
+
+            }, message => {
+                switch(message.type) {
+                    case 'success':
+                        toast.success(message.msg)
+                        setAttendanceDialogOpen(false)
+                        break
+
+                    case 'error':
+                        toast.error(message.msg)
+                        setAttendanceDialogOpen(false)
+                        break
+
+                    case 'inquiry':
+                        if(window.confirm('You\'ve already marked attendance for this session.\n\nDo you want to overwrite it?'))
+                            socket.emit('mark-attendance', {
+                                room: joinRoom,
+                                attendanceTitle,
+                                groupId: props.groupId,
+                                sessionId: props.sessionId,
+                                confirmed: true
+                
+                            }, message => {
+                                setAttendanceDialogOpen(false)
+                                switch(message.type) {
+                                    case 'success':
+                                        toast.success(message.msg)
+                                        break
+                
+                                    case 'error':
+                                        toast.error(message.msg)
+                                        break
+                                }
+                            })
+                }
+            })
+    }
+
     const handleHostControlsSubmit = () => {
         socket.emit('host-controls-changed', {
             room: joinRoom,
@@ -1126,6 +1178,14 @@ const SessionScreen = (props) => {
                             >
                                 <SettingsIcon htmlColor='#3C3C3C' />
                             </IconButton>
+                            <IconButton
+                                color='primary'
+                                title='Mark session attendance (including breakout rooms)'
+                                className={clsx('mx-1', classes.controlIcon)}
+                                onClick={() => setAttendanceDialogOpen(true)}
+                            >
+                                <DoneAllTwoToneIcon htmlColor='#3C3C3C' />
+                            </IconButton>
                         </>
                     )}
                     <IconButton
@@ -1255,6 +1315,33 @@ const SessionScreen = (props) => {
                     handleSubmit={handleLiveFormSubmit}
                     handleClose={() => setFormSolverDialogOpen(false)}
                 />
+            </Dialog>
+
+            {/* Attendance */}
+            <Dialog
+                fullWidth
+                maxWidth='xs'
+                open={attendanceDialogOpen}
+                onClose={() => setAttendanceDialogOpen(false)}
+            >
+                <DialogTitle>Enter attendance title</DialogTitle>
+                <DialogContent>
+                    <TextField
+                        fullWidth
+                        label='Title'
+                        className='mt-2'
+                        variant='outlined'
+                        onChange={e => setAttendanceTitle(e.target.value)}
+                    />
+                </DialogContent>
+                <DialogActions>
+                    <Button onClick={() => setAttendanceDialogOpen(false)}>
+                        Cancel
+                    </Button>
+                    <Button variant='contained' onClick={handleMarkAttendance}>
+                        Submit
+                    </Button>
+                </DialogActions>
             </Dialog>
         </div>
     )

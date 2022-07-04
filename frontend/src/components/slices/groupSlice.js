@@ -46,6 +46,7 @@ export const groupSlice = createSlice({
         error: null,
 
         groupRedirect: null,
+        formRedirect: null,
     },
     reducers: {
         setGroupRedirect: (state, action) => {
@@ -53,6 +54,12 @@ export const groupSlice = createSlice({
         },
         nullifyGroupRedirect: (state, action) => {
             state.groupRedirect = null
+        },
+        setFormRedirect: (state, action) => {
+            state.formRedirect = action.payload
+        },
+        nullifyFormRedirect: (state, action) => {
+            state.formRedirect = null
         },
         nullifyRequestData: (state, action) => {
             state.responseMsg = null
@@ -86,6 +93,6 @@ export const groupSlice = createSlice({
 })
 
 // Action creators are generated for each case reducer function
-export const { setGroupRedirect, nullifyGroupRedirect, nullifyRequestData } = groupSlice.actions
+export const { setGroupRedirect, nullifyGroupRedirect, nullifyRequestData, setFormRedirect, nullifyFormRedirect } = groupSlice.actions
 
 export default groupSlice.reducer

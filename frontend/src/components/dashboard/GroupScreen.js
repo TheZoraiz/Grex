@@ -25,9 +25,10 @@ import { io } from 'socket.io-client'
 import clsx from 'clsx';
 
 import GroupMessage from './GroupMessage';
+import GroupForms from './GroupForms';
+import Attendances from './Attendances';
 
 import { setSocket, setSessionInfo } from '../slices/sessionSlice'
-import GroupForms from './GroupForms';
 
 const useStyles = makeStyles(theme => ({
     copyToClipboard: {
@@ -89,6 +90,7 @@ const GroupScreen = (props) => {
 
     const { userData } = useSelector(state => state.global)
     const { socket: groupSocket } = useSelector(state => state.session)
+    const { formRedirect } = useSelector(state => state.groups)
 
     const [message, setMessage] = useState('')
     const [ongoingSession, setOngoingSession] = useState(null)
@@ -145,7 +147,7 @@ const GroupScreen = (props) => {
     useEffect(() => {
         if(groupMessages?.length > 0) {
             let messagesContainer = document.getElementById('messages-container');
-            if(messagesContainer.scrollTop)
+            if(messagesContainer?.scrollTop)
                 messagesContainer.scrollTop = messagesContainer?.scrollHeight;
         }
     }, [groupMessages])
@@ -157,6 +159,11 @@ const GroupScreen = (props) => {
             dispatch(setSocket(null))
         }
     }, [])
+
+    useEffect(() => {
+        if(formRedirect)
+            setTabValue(1)
+    }, [formRedirect])
 
     useEffect(async() => {
         if(groupSocket) {
@@ -200,6 +207,13 @@ const GroupScreen = (props) => {
                         label='Forms'
                         {...a11yProps(1)}
                     />
+                    {userData.id === props.group.host._id && (
+                        <Tab
+                            className='normal-case'
+                            label='Attendances'
+                            {...a11yProps(2)}
+                        />
+                    )}
                 </Tabs>
 
                 <div className='flex items-center'>
@@ -276,11 +290,14 @@ const GroupScreen = (props) => {
                 </div>
             </TabPanel>
 
-            {/* Submitted Forms */}
+            {/* Group Forms */}
             <TabPanel value={tabValue} index={1}>
-                <GroupForms
-                    group={props.group}
-                />
+                <GroupForms group={props.group} />
+            </TabPanel>
+
+            {/* Session attendances */}
+            <TabPanel value={tabValue} index={2}>
+                <Attendances group={props.group} />
             </TabPanel>
         </div>
     )

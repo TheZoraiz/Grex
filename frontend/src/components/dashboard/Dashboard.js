@@ -19,9 +19,10 @@ import PropTypes from 'prop-types'
 import { useDispatch, useSelector } from 'react-redux'
 import { Navigate, useNavigate } from 'react-router-dom'
 import clsx from 'clsx'
+// import PDFViewer from 'pdf-viewer-reactjs'
 
 import { getDashboardData } from '../slices/dashboardSlice'
-import { setGroupRedirect } from '../slices/groupSlice'
+import { setFormRedirect, setGroupRedirect } from '../slices/groupSlice'
 
 import Groups from './Groups'
 import Navbar from '../shared-components/Navbar'
@@ -87,7 +88,7 @@ const Dashboard = () => {
     const [tabValue, setTabValue] = useState(0)
 
     const { serverMsg, userData, error: authError } = useSelector(state => state.global)
-    const { groups, liveSessions } = useSelector(state => state.dashboard)
+    const { groups, groupForms, liveSessions } = useSelector(state => state.dashboard)
 
     const handleTabChange = (event, newValue) => {
         setTabValue(newValue)
@@ -115,7 +116,13 @@ const Dashboard = () => {
                     <Tab label='Dashboard' {...a11yProps(0)} />
                     <Tab label='Groups' {...a11yProps(1)} />
                 </Tabs>
-                <TabPanel value={tabValue} index={0}>
+                <TabPanel value={tabValue} index={0} className='overflow-y-scroll'>
+                    
+                    {/* <PDFViewer
+                        document={{
+                            url: process.env.REACT_APP_BACKEND_URI+'/uploads/test.pdf',
+                        }}
+                    /> */}
 
                     <Grid container>
                         <Grid className={classes.cellContainer} item xs={12} md={6}>
@@ -145,6 +152,28 @@ const Dashboard = () => {
                         </Grid>
                         <Grid className={classes.cellContainer} item xs={12} md={6}>
                             <div className={classes.cell}>
+                                <Typography variant='h4' className='mb-2 font-bold'>
+                                    Group Forms
+                                </Typography>
+                                {groupForms?.length === 0 && (
+                                    <Typography variant='body1'>
+                                        No group forms...
+                                    </Typography>
+                                )}
+
+                                <List dense>
+                                    {groupForms?.map(form => (
+                                        <ListItem disablePadding>
+                                            <ListItemButton onClick={() => {
+                                                dispatch(setGroupRedirect(form.groupId?._id))
+                                                dispatch(setFormRedirect(form._id))
+                                                setTabValue(1)
+                                            }}>
+                                                <ListItemText primary={form.formTitle + ' - ' + form.groupId?.name} />
+                                            </ListItemButton>
+                                        </ListItem>
+                                    ))}
+                                </List>
                             </div>
                         </Grid>
                         <Grid className={classes.cellContainer} item xs={12}>

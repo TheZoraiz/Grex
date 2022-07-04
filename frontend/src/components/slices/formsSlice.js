@@ -27,6 +27,18 @@ export const getGroupForms = createAsyncThunk(
     }
 )
 
+export const getGroupUserForms = createAsyncThunk(
+    'forms/getGroupUserForms',
+    async (data, { rejectWithValue }) => {
+        try {
+            let response = await axios.get(`${process.env.REACT_APP_BACKEND_URI}/api/get-group-user-forms?groupId=${data.groupId}&userId=${data.userId}`, { withCredentials: true })
+            return response.data
+        } catch (error) {
+            return rejectWithValue(error.response.data);
+        }
+    }
+)
+
 export const editGroupForm = createAsyncThunk(
     'forms/editGroupForm',
     async (data, { rejectWithValue }) => {
@@ -69,6 +81,7 @@ export const formsSlice = createSlice({
     name: 'forms',
     initialState: {
         groupForms: null,
+        groupUserForms: null,
         formRefresh: false,
         tempFormSubmissions: null,
     },
@@ -79,6 +92,7 @@ export const formsSlice = createSlice({
     },
     extraReducers: {
         [createGroupForm.fulfilled]: (state, action) => {
+            state.formRefresh = true
             toast.update(
                 'create-group-form',
                 { render: action.payload, type: 'success', isLoading: false, autoClose: 5000, draggable: true, closeOnClick: true }
@@ -93,7 +107,7 @@ export const formsSlice = createSlice({
 
 
         [getGroupForms.fulfilled]: (state, action) => {
-            state.formRefresh = true
+            // state.formRefresh = true
             state.groupForms = action.payload
         },
         [getGroupForms.rejected]: (state, action) => {
@@ -137,6 +151,15 @@ export const formsSlice = createSlice({
         },
         [getFormSubmissions.rejected]: (state, action) => {
             state.tempFormSubmissions = null
+            toast.error(action.payload)
+        },
+
+
+        [getGroupUserForms.fulfilled]: (state, action) => {
+            state.groupUserForms = action.payload
+        },
+        [getGroupUserForms.rejected]: (state, action) => {
+            state.groupUserForms = null
             toast.error(action.payload)
         },
     }

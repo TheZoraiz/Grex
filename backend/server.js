@@ -37,6 +37,8 @@ const GroupMessage = require('./db_schemas/GroupMessage')
 const Session = require('./db_schemas/Session')
 const GroupForm = require('./db_schemas/GroupForm')
 const SubmittedForm = require('./db_schemas/SubmittedForm')
+const SessionAttendance = require('./db_schemas/SessionAttendance')
+const Group = require('./db_schemas/Group')
 
 config.connectDb()
 mongoose.connection.once('error', () => {
@@ -733,7 +735,6 @@ io.on('connection', async (socket) => {
     })
 
     socket.on('end-live-form', ({ room }, callback) => {
-
         try {
             let tempForm = transports[room]['hostControls'].liveForm
             delete transports[room]['hostControls'].liveForm
@@ -796,8 +797,61 @@ io.on('connection', async (socket) => {
             console.log(error)
             io.to(socket.id).emit('end-session-cascading-failed', error);
         }
-
     })
+
+    socket.on('mark-attendance', async({ room, attendanceTitle, groupId, sessionId, confirmed }, callback) => {
+        try {
+            let oldAttendance = await SessionAttendance.findOne({ sessionId }).exec()
+            if(!confirmed && oldAttendance) {
+                callback({ type: 'inquiry' })
+                return
+            }
+
+            if(confirmed && oldAttendance)
+                await SessionAttendance.deleteOne({ sessionId }).exec()
+
+            let presentParticipants = Object.values(transports[room].participants)
+            
+            let presentParticipantIds = []
+            presentParticipants.forEach(participant => {
+                presentParticipantIds.push(mongoose.Types.ObjectId(participant.user.id))
+            })
+
+            let breakoutRooms = getBreakoutRoomsArray(room)
+            breakoutRooms.forEach(breakoutRoom => {
+                if(room === breakoutRoom.id)
+                    return
+
+                Object.values(transports[breakoutRoom.id].participants).forEach(participant => {
+                    presentParticipantIds.push(mongoose.Types.ObjectId(participant.user.id))
+                })
+            })
+
+            let presentParticipantIdStrings = presentParticipantIds.map(objectId => objectId.toString())
+            let groupMemberIds = await Group.findById(mongoose.Types.ObjectId(groupId._id)).distinct('members').exec()
+
+            let absentGroupMembers = groupMemberIds.filter(objectId => {
+                if(presentParticipantIdStrings.indexOf(objectId.toString()) === -1)
+                    return true
+                return false
+            })
+
+            await SessionAttendance.create({
+                groupId: groupId._id,
+                sessionId,
+                title: attendanceTitle,
+                present: presentParticipantIds,
+                absent: absentGroupMembers,
+            })
+
+            callback({ msg: 'Attendance marked successfully', type: 'success' })
+
+        } catch(error) {
+            console.log(error)
+            callback({ msg: 'There was an error and attendance couldn\'t be marked. Please try again', type: 'error' })
+        }
+    })
+
 
     socket.on('disconnect', () => {
         console.log(socket.id, 'disconnected')
