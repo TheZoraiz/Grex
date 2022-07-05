@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import {
     Typography,
     Tabs,
@@ -19,13 +19,14 @@ import PropTypes from 'prop-types'
 import { useDispatch, useSelector } from 'react-redux'
 import { Navigate, useNavigate } from 'react-router-dom'
 import clsx from 'clsx'
-// import PDFViewer from 'pdf-viewer-reactjs'
+import PSPDFKit from 'pspdfkit'
 
 import { getDashboardData } from '../slices/dashboardSlice'
 import { setFormRedirect, setGroupRedirect } from '../slices/groupSlice'
 
 import Groups from './Groups'
 import Navbar from '../shared-components/Navbar'
+import PDFViewer from '../shared-components/PDFViewer'
 
 const useStyles = makeStyles(theme => ({
     bodyContainer: {
@@ -85,6 +86,8 @@ const Dashboard = () => {
     const navigate = useNavigate()
     const dispatch = useDispatch()
 
+    const pdfRef = useRef(null)
+
     const [tabValue, setTabValue] = useState(0)
 
     const { serverMsg, userData, error: authError } = useSelector(state => state.global)
@@ -116,14 +119,7 @@ const Dashboard = () => {
                     <Tab label='Dashboard' {...a11yProps(0)} />
                     <Tab label='Groups' {...a11yProps(1)} />
                 </Tabs>
-                <TabPanel value={tabValue} index={0} className='overflow-y-scroll'>
-                    
-                    {/* <PDFViewer
-                        document={{
-                            url: process.env.REACT_APP_BACKEND_URI+'/uploads/test.pdf',
-                        }}
-                    /> */}
-
+                <TabPanel value={tabValue} index={0} className='overflow-y-scroll'> 
                     <Grid container>
                         <Grid className={classes.cellContainer} item xs={12} md={6}>
                             <div className={classes.cell}>

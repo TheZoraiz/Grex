@@ -189,14 +189,14 @@ const GroupForms = (props) => {
                                     {(tempForm._id === groupForm._id && formSubmissionsLoading) ? (
                                         <CircularProgress size={25} />
                                     ) : (
-                                        <IconButton title='View submissions' onClick={() => handleViewSubmissionsClick(groupForm)}>
+                                        <IconButton title='View submissions' onClick={(e) => { e.stopPropagation(); handleViewSubmissionsClick(groupForm)}}>
                                             <VisibilityIcon />
                                         </IconButton>
                                     )}
-                                    <IconButton title='Edit form' onClick={() => handleEditFormClick(groupForm)}>
+                                    <IconButton title='Edit form' onClick={(e) => { e.stopPropagation(); handleEditFormClick(groupForm) }}>
                                         <EditIcon />
                                     </IconButton>
-                                    <IconButton title='Delete form' onClick={() => handleDeleteGroupForm(groupForm)}>
+                                    <IconButton title='Delete form' onClick={(e) => { e.stopPropagation(); handleDeleteGroupForm(groupForm) }}>
                                         <DeleteIcon />
                                     </IconButton>
                                 </div>

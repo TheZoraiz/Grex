@@ -12,6 +12,7 @@ const https = require('https')
 const http = require('http')
 const path = require('path')
 const fs = require('fs')
+const { v4: uuidv4 } = require('uuid')
 
 if(process.env.RUNNING_MODE === 'production') {
     httpServer = https.createServer(
@@ -28,6 +29,7 @@ if(process.env.RUNNING_MODE === 'production') {
 const { Server } = require('socket.io')
 
 let io = new Server(httpServer, {
+    maxHttpBufferSize: 1e8,
     cors: {
         origin: '*',
     }
@@ -123,6 +125,8 @@ let mediaCodecs = [
 let groupMessages = {}
 let groupSessions = {}
 
+let liveSessionMessages = {}
+
 io.on('connection', async (socket) => {
 
     // _________________________________
@@ -191,6 +195,7 @@ io.on('connection', async (socket) => {
 
             let newRouter = await worker.createRouter({ mediaCodecs })
             routers[room] = newRouter
+            liveSessionMessages[room] = []
 
             isCreator = true
 
@@ -230,6 +235,12 @@ io.on('connection', async (socket) => {
                 form: transports[room]['hostControls'].liveForm,
                 formsStatus: transports[room]['hostControls'].submittedForms,
             })
+
+        if(transports[room]['hostControls'].liveFilePath)
+            io.to(socket.id).emit('new-live-file-shared', transports[room]['hostControls'].liveFilePath)
+
+        if(liveSessionMessages[room])
+            io.to(socket.id).emit('new-session-message', liveSessionMessages[room])
 
         transports[room]['participants'] = {
             ...transports[room]['participants'],
@@ -852,6 +863,59 @@ io.on('connection', async (socket) => {
         }
     })
 
+    socket.on('share-live-file', async({ room, pdfFile }, callback) => {
+        try {
+            let newFilePath = 'uploads/' + uuidv4() + '.pdf'
+            fs.writeFileSync(__dirname + '/public/' + newFilePath, pdfFile)
+
+            transports[room]['hostControls'].liveFilePath = newFilePath
+            socket.to(room).emit('new-live-file-shared', newFilePath)
+            callback(newFilePath)
+
+        } catch(error) {
+            console.log(error)
+            io.to(socket.id).emit('error', error);
+        }
+    })
+
+    socket.on('stop-live-file-share', async({ room, liveFilePath }, callback) => {
+        try {
+            fs.unlinkSync(__dirname + '/public/' + liveFilePath)
+            delete transports[room]['hostControls'].liveFilePath
+
+            socket.to(room).emit('live-file-share-stopped')
+            callback()
+
+        } catch(error) {
+            console.log(error)
+            io.to(socket.id).emit('error', error);
+        }
+    })
+
+    socket.on('live-file-viewstate-update', async({ room, newViewState }) => {
+        try {
+            socket.to(room).emit('file-viewstate', newViewState)
+
+        } catch(error) {
+            console.log(error)
+            io.to(socket.id).emit('error', error);
+        }
+    })
+
+    socket.on('send-session-message', async({ room, user, tempMessage }, callback) => {
+        try {
+            liveSessionMessages[room].push({
+                user,
+                msg: tempMessage,
+            })
+            socket.to(room).emit('new-session-message', liveSessionMessages[room])
+            callback(liveSessionMessages[room])
+
+        } catch(error) {
+            console.log(error)
+            io.to(socket.id).emit('error', error);
+        }
+    })
 
     socket.on('disconnect', () => {
         console.log(socket.id, 'disconnected')

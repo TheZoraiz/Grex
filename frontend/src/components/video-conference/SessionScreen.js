@@ -20,6 +20,8 @@ import {
     CircularProgress,
     Badge,
     TextField,
+    Drawer,
+    InputAdornment,
 } from '@mui/material'
 import { tooltipClasses } from '@mui/material/Tooltip'
 import {
@@ -33,6 +35,9 @@ import {
     Settings as SettingsIcon,
     Quiz as QuizIcon,
     DoneAllTwoTone as DoneAllTwoToneIcon,
+    FindInPage as FindInPageIcon,
+    ChatBubble as ChatBubbleIcon,
+    Send as SendIcon,
 } from '@mui/icons-material';
 import { makeStyles, styled } from '@mui/styles'
 import * as mediasoupClient from 'mediasoup-client'
@@ -47,6 +52,8 @@ import { toast } from 'react-toastify';
 import { nullifyAuthError, nullifyLogoutData } from '../globalSlice';
 
 import FormSolver from '../shared-components/FormSolver';
+import PDFViewer from '../shared-components/PDFViewer';
+import SessionMessage from './SessionMessage';
 
 const videoConstraints = {
     video: {
@@ -214,6 +221,16 @@ const SessionScreen = (props) => {
 
     const [attendanceTitle, setAttendanceTitle] = useState('')
 
+    const liveFileInput = useRef(null)
+    const [liveFilePath, setLiveFilePath] = useState(null)
+    const [liveFileViewState, setLiveFileViewState] = useState(null)
+
+    const [messagesDrawerOpen, setMessagesDrawerOpen] = useState(false)
+    const messagesDrawerOpenRef = useRef(messagesDrawerOpen)
+    const [textMessages, setTextMessages] = useState([])
+    const [tempMessage, setTempMessage] = useState('')
+    const [sendMessageLoading, setSendMessageLoading] = useState(false)
+    
     const [reRender, setReRender] = useState(false)
 
 	const projectionVidEl = useRef(null);
@@ -720,6 +737,24 @@ const SessionScreen = (props) => {
             socket.on('form-status-update', (formsStatus) => {
                 props.setFormsStatus(formsStatus)
             })
+
+            socket.on('new-live-file-shared', (tempFilePath) => {
+                setLiveFilePath(tempFilePath)
+            })
+
+            socket.on('live-file-share-stopped', () => {
+                setLiveFilePath(null)
+            })
+
+            socket.on('file-viewstate', (newViewState) => {
+                setLiveFileViewState(newViewState)
+            })
+
+            socket.on('new-session-message', (newMessages) => {
+                if(!messagesDrawerOpenRef.current)
+                    toast.info(newMessages[newMessages.length - 1].user?.name + ' has sent a message')
+                setTextMessages(newMessages)
+            })
             
             // new-participant is still left !!
     
@@ -766,6 +801,10 @@ const SessionScreen = (props) => {
     }
 
     const projectShareClick = () => {
+        if(liveFilePath) {
+            toast.error('Screen cannot be projected alongside a live file share')
+            return
+        }
         socket.emit('can-project-screen', { room: joinRoom }, ({ projectionExists, projectingUser }) => {
             if(projectionExists) {
                 logAlert(
@@ -911,6 +950,42 @@ const SessionScreen = (props) => {
             })
     }
 
+    const handleShareLivePDF = (e) => {
+        e.preventDefault()
+        e.stopPropagation()
+
+        if(localProjectionStream) {
+            toast.error('Live file cannot be shared along with a screen projection')
+            return
+        }
+
+		const pdfFile = e.target.files[0]
+		if(pdfFile) {
+            socket.emit('share-live-file', {
+                room: joinRoom,
+                pdfFile,
+
+            }, (tempFilePath) => setLiveFilePath(tempFilePath))
+		}
+
+        e.target.value = null;
+    }
+
+    const stopLiveFileShare = () => {
+        socket.emit('stop-live-file-share', {
+            room: joinRoom,
+            liveFilePath,
+
+        }, () => setLiveFilePath(null))
+    }
+
+    const handleChangeLiveFileViewState = (newViewState) => {
+        socket.emit('live-file-viewstate-update', {
+            room: joinRoom,
+            newViewState,
+        })
+    }
+
     const handleHostControlsSubmit = () => {
         socket.emit('host-controls-changed', {
             room: joinRoom,
@@ -948,6 +1023,25 @@ const SessionScreen = (props) => {
                 return true
         }
         return false
+    }
+
+    const handleDrawerClose = () => {
+        setMessagesDrawerOpen(false)
+        messagesDrawerOpenRef.current = false
+    }
+
+    const handleSendSessionMessage = () => {
+        if(tempMessage === '') {
+            toast.error('You can\'t send an empty message')
+            return
+        }
+        setSendMessageLoading(true)
+
+        socket.emit('send-session-message', { room: joinRoom, user: userData, tempMessage }, (newMessages) => {
+            setTempMessage('')
+            setSendMessageLoading(false)
+            setTextMessages(newMessages)
+        })
     }
 
     const handleEndSession = () => {
@@ -1002,7 +1096,7 @@ const SessionScreen = (props) => {
         <div className='w-full flex flex-col justify-center'>
             <div className={clsx('flex mx-5 my-3', classes.participantsContainer)}>
                 {(Boolean(localProjectionStream) || projectionVideoConsumer) && (
-                    <div className='flex flex-col justify-center items-center pr-2' style={{ flex: 1 }}>
+                    <div className='flex flex-col justify-center items-center pr-2' style={{ flex: 1.5 }}>
                         <video
                             autoPlay
                             ref={projectionVidEl}
@@ -1014,6 +1108,17 @@ const SessionScreen = (props) => {
                         </Typography>
                     </div>
                 )}
+                {liveFilePath && (
+                    <div className='flex flex-col justify-center items-center pr-2' style={{ flex: 1.5 }}>
+                        <PDFViewer
+                            isHost={props.sessionHostId === userData.id}
+                            viewState={liveFileViewState}
+                            handleChangeLiveFileViewState={handleChangeLiveFileViewState}
+                            document={process.env.REACT_APP_BACKEND_URI+'/'+liveFilePath}
+                        />
+                    </div>
+                )}
+
                 <Grid container spacing={3} style={{ flex: 1 }} className='pl-2'>
                     <Grid item xs={12 - gridHorizontalValue} className={classes.participantWindow} style={{ height: `${gridVerticalValue}%` }}>
                         <ParticipantWindow 
@@ -1186,6 +1291,23 @@ const SessionScreen = (props) => {
                             >
                                 <DoneAllTwoToneIcon htmlColor='#3C3C3C' />
                             </IconButton>
+
+                            <input
+                                accept='application/pdf'
+                                className='hidden'
+                                id='button-file'
+                                type='file'
+                                ref={liveFileInput}
+                                onChange={handleShareLivePDF}
+                            />
+                            <IconButton
+                                color='primary'
+                                title='Share live PDF'
+                                className={clsx('mx-1', (liveFilePath ? classes.controlIconStop : classes.controlIcon))}
+                                onClick={() => {liveFilePath ? stopLiveFileShare() : liveFileInput.current.click()}}
+                            >
+                                <FindInPageIcon htmlColor='#3C3C3C' />
+                            </IconButton>
                         </>
                     )}
                     <IconButton
@@ -1224,6 +1346,14 @@ const SessionScreen = (props) => {
                         )}
                     </IconButton>
 
+                    <IconButton
+                        color='primary'
+                        title='Chat'
+                        className={clsx('mx-1', classes.controlIcon)}
+                        onClick={() => { setMessagesDrawerOpen(true); messagesDrawerOpenRef.current = true }}
+                    >
+                        <ChatBubbleIcon htmlColor='#3C3C3C' />
+                    </IconButton>
                     <IconButton
                         color='primary'
                         title='End session'
@@ -1343,6 +1473,49 @@ const SessionScreen = (props) => {
                     </Button>
                 </DialogActions>
             </Dialog>
+
+            {/* Session messages */}
+            <Drawer
+                anchor='right'
+                open={messagesDrawerOpen}
+                onClose={handleDrawerClose}
+                style={{ overflowY: 'hidden' }}
+            >
+                <div className='p-3' style={{ height: '100vh' }}>
+                    <div className='overflow-y-scroll' style={{ height: '90vh' }}>
+                        {textMessages.map(message => (
+                            <SessionMessage
+                                senderName={message.user?.name}
+                                senderPic={message.user?.profPicPath}
+                                message={message.msg}
+                            />
+                        ))}
+                    </div>
+                    <div style={{ height: '10vh' }}>
+                        <TextField
+                            fullWidth
+                            label='Enter message'
+                            value={tempMessage}
+                            onChange={(e) => setTempMessage(e.target.value)}
+                            onKeyPress={(e) => { if(e.key === 'Enter') handleSendSessionMessage() }}
+                            InputProps={{
+                                endAdornment: (
+                                    <InputAdornment position="end" className='mr-0.5'>
+                                        <IconButton
+                                            aria-label="toggle password visibility"
+                                            onClick={handleSendSessionMessage}
+                                            onMouseDown={(event) => event.preventDefault()}
+                                            edge="end"
+                                        >
+                                            {sendMessageLoading ? (<CircularProgress size={30} />) : (<SendIcon fontSize='large' />)}
+                                        </IconButton>
+                                    </InputAdornment>
+                                )
+                            }}
+                        />
+                    </div>
+                </div>
+            </Drawer>
         </div>
     )
 }
