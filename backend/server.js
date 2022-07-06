@@ -213,56 +213,60 @@ io.on('connection', async (socket) => {
     })
 
     socket.on('web-rtc-transport', async ({ room, user, isHost, hostControls }, callback) => {
-
-        if(!transports[room]) {
-            if(isHost)
-                transports[room] = { participants: {}, hostControls }
-            else
-                transports[room] = { participants: {} }
-        }
-        
-        if(isHost && !transports[room]['hostControls'])
-            transports[room]['hostControls'] = hostControls
-        
-        if(!isHost && transports[room]['hostControls']?.liveForm)
-            io.to(socket.id).emit('new-live-form', {
-                form: transports[room]['hostControls'].liveForm,
-                formsStatus: transports[room]['hostControls'].submittedForms,
-            })
-
-        else if(isHost && transports[room]['hostControls']?.liveForm)
-            io.to(socket.id).emit('your-live-form-is-active', {
-                form: transports[room]['hostControls'].liveForm,
-                formsStatus: transports[room]['hostControls'].submittedForms,
-            })
-
-        if(transports[room]['hostControls'].liveFilePath)
-            io.to(socket.id).emit('new-live-file-shared', transports[room]['hostControls'].liveFilePath)
-
-        if(liveSessionMessages[room])
-            io.to(socket.id).emit('new-session-message', liveSessionMessages[room])
-
-        transports[room]['participants'] = {
-            ...transports[room]['participants'],
-            [socket.id]: {
-                username: user.name,
-                user,
-                producerTransport: await createWebRtcTransport(room, socket.id, callback),
-                consumerTransport: await createWebRtcTransport(room, socket.id, undefined),
+        try {
+            if(!transports[room]) {
+                if(isHost)
+                    transports[room] = { participants: {}, hostControls }
+                else
+                    transports[room] = { participants: {} }
             }
+            
+            if(isHost && !transports[room]['hostControls'])
+                transports[room]['hostControls'] = hostControls
+            
+            if(!isHost && transports[room]['hostControls']?.liveForm)
+                io.to(socket.id).emit('new-live-form', {
+                    form: transports[room]['hostControls'].liveForm,
+                    formsStatus: transports[room]['hostControls'].submittedForms,
+                })
+
+            else if(isHost && transports[room]['hostControls']?.liveForm)
+                io.to(socket.id).emit('your-live-form-is-active', {
+                    form: transports[room]['hostControls'].liveForm,
+                    formsStatus: transports[room]['hostControls'].submittedForms,
+                })
+
+            if(transports[room]['hostControls']?.liveFilePath)
+                io.to(socket.id).emit('new-live-file-shared', transports[room]['hostControls'].liveFilePath)
+
+            if(liveSessionMessages[room])
+                io.to(socket.id).emit('new-session-message', liveSessionMessages[room])
+
+            transports[room]['participants'] = {
+                ...transports[room]['participants'],
+                [socket.id]: {
+                    username: user.name,
+                    user,
+                    producerTransport: await createWebRtcTransport(room, socket.id, callback),
+                    consumerTransport: await createWebRtcTransport(room, socket.id, undefined),
+                }
+            }
+
+            let serverConsumerTransportParams = {
+                id:             transports[room]['participants'][socket.id].consumerTransport.id,
+                iceParameters:  transports[room]['participants'][socket.id].consumerTransport.iceParameters,
+                iceCandidates:  transports[room]['participants'][socket.id].consumerTransport.iceCandidates,
+                dtlsParameters: transports[room]['participants'][socket.id].consumerTransport.dtlsParameters,
+            }
+
+            io.to(socket.id).emit('server-consumer-transport-created', { serverConsumerTransportParams })
+
+            console.log('transports', transports)
+            console.log(`transports[${room}]`, transports[room])
+
+        } catch(error) {
+            console.log(error)
         }
-
-        let serverConsumerTransportParams = {
-            id:             transports[room]['participants'][socket.id].consumerTransport.id,
-            iceParameters:  transports[room]['participants'][socket.id].consumerTransport.iceParameters,
-            iceCandidates:  transports[room]['participants'][socket.id].consumerTransport.iceCandidates,
-            dtlsParameters: transports[room]['participants'][socket.id].consumerTransport.dtlsParameters,
-        }
-
-        io.to(socket.id).emit('server-consumer-transport-created', { serverConsumerTransportParams })
-
-        console.log('transports', transports)
-        console.log(`transports[${room}]`, transports[room])
     })
 
     socket.on('transport-connect', async ({ dtlsParameters, consumerTransportId, isConsumer, room }) => {
