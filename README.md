@@ -19,5 +19,7 @@ Grex is a video conferencing platform built as a Final Year Project for use by t
 <img width="568" height="725" alt="60c59106-4983-480d-8d5a-9ce761b4d93c" src="https://github.com/user-attachments/assets/a06f2fbb-f33c-4792-89f7-bd7ebe9a7780" />
 
 # Members
+
 Zoraiz Hassan
+
 Ahmad Raza
